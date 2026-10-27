@@ -1,0 +1,253 @@
+{
+  "kind": "resume",
+  "page": {
+    "width": 595.32,
+    "height": 841.92,
+    "top": 30.6,
+    "bottom": 29.28,
+    "left": 32.4,
+    "right": 18
+  },
+  "header": {
+    "name": {
+      "font": {
+        "family": "Georgia",
+        "generic": "serif"
+      },
+      "bold": true,
+      "italic": false,
+      "size": 22,
+      "color": "#1c1c1c",
+      "upper": false,
+      "align": "left",
+      "base": 52.56
+    },
+    "contact": {
+      "font": {
+        "family": "Calibri",
+        "generic": "sans-serif"
+      },
+      "bold": false,
+      "italic": false,
+      "size": 8.5,
+      "color": "#2f5d50",
+      "align": "left",
+      "gap": 15.96,
+      "separator": " | ",
+      "separatorColor": "#5a5a5a",
+      "linkColor": "#2f5d50"
+    },
+    "rule": {
+      "color": "#2f5d50",
+      "width": 2.16,
+      "offset": 11.28
+    }
+  },
+  "afterHeader": 22.82,
+  "heading": {
+    "font": {
+      "family": "Calibri",
+      "generic": "sans-serif"
+    },
+    "bold": true,
+    "italic": false,
+    "size": 9,
+    "color": "#2f5d50",
+    "upper": true,
+    "rule": null,
+    "afterRule": 18,
+    "gapAfter": 17.04,
+    "sectionGap": 25.32
+  },
+  "labels": {
+    "summary": "PROFESSIONAL SUMMARY",
+    "skills": "SKILLS",
+    "experience": "EXPERIENCE",
+    "education": "EDUCATION"
+  },
+  "order": [
+    "summary",
+    "skills",
+    "experience",
+    "education"
+  ],
+  "body": {
+    "font": {
+      "family": "Calibri",
+      "generic": "sans-serif"
+    },
+    "bold": false,
+    "italic": false,
+    "size": 10,
+    "color": "#1c1c1c",
+    "line": 14.04
+  },
+  "bold": {
+    "font": {
+      "family": "Calibri",
+      "generic": "sans-serif"
+    },
+    "bold": true,
+    "italic": false,
+    "size": 10,
+    "color": "#1c1c1c"
+  },
+  "skill": {
+    "label": {
+      "font": {
+        "family": "Calibri",
+        "generic": "sans-serif"
+      },
+      "bold": true,
+      "italic": false,
+      "size": 9.5,
+      "color": "#5a5a5a"
+    },
+    "items": {
+      "font": {
+        "family": "Calibri",
+        "generic": "sans-serif"
+      },
+      "bold": true,
+      "italic": false,
+      "size": 9.5,
+      "color": "#1c1c1c"
+    },
+    "line": 13.5,
+    "entryGap": 15.12
+  },
+  "role": {
+    "title": {
+      "font": {
+        "family": "Calibri",
+        "generic": "sans-serif"
+      },
+      "bold": true,
+      "italic": false,
+      "size": 11,
+      "color": "#1c1c1c"
+    },
+    "meta": {
+      "font": {
+        "family": "Calibri",
+        "generic": "sans-serif"
+      },
+      "bold": false,
+      "italic": false,
+      "size": 9,
+      "color": "#5a5a5a",
+      "separator": " · ",
+      "datesRight": true,
+      "datesOn": "title"
+    },
+    "dates": {
+      "font": {
+        "family": "Calibri",
+        "generic": "sans-serif"
+      },
+      "bold": false,
+      "italic": false,
+      "size": 9,
+      "color": "#5a5a5a"
+    },
+    "overview": {
+      "font": {
+        "family": "Calibri",
+        "generic": "sans-serif"
+      },
+      "bold": false,
+      "italic": false,
+      "size": 9.5,
+      "color": "#5a5a5a",
+      "line": 12.85
+    },
+    "titleToMeta": 12.48,
+    "metaToNext": 15.54,
+    "overviewToBullet": 18.24,
+    "roleGap": 33.27,
+    "companyFirst": true,
+    "divider": {
+      "color": "#c8c8c8",
+      "width": 0.48,
+      "above": 12.72
+    }
+  },
+  "bullet": {
+    "char": "–",
+    "mark": {
+      "font": {
+        "family": "Calibri",
+        "generic": "monospace"
+      },
+      "bold": false,
+      "italic": false,
+      "size": 10,
+      "color": "#2f5d50"
+    },
+    "style": {
+      "font": {
+        "family": "Calibri",
+        "generic": "sans-serif"
+      },
+      "bold": false,
+      "italic": false,
+      "size": 10,
+      "color": "#1c1c1c"
+    },
+    "bold": {
+      "font": {
+        "family": "Calibri",
+        "generic": "sans-serif"
+      },
+      "bold": true,
+      "italic": false,
+      "size": 10,
+      "color": "#1c1c1c"
+    },
+    "bulletIndent": 9,
+    "textIndent": 18.5,
+    "wrapIndent": 9,
+    "line": 13.44,
+    "gap": 16.92
+  },
+  "education": {
+    "degree": {
+      "font": {
+        "family": "Calibri",
+        "generic": "sans-serif"
+      },
+      "bold": false,
+      "italic": false,
+      "size": 9,
+      "color": "#5a5a5a"
+    },
+    "school": {
+      "font": {
+        "family": "Calibri",
+        "generic": "sans-serif"
+      },
+      "bold": true,
+      "italic": false,
+      "size": 11,
+      "color": "#1c1c1c",
+      "separator": " · "
+    },
+    "degreeToSchool": 12.48,
+    "entryGap": 24.3,
+    "schoolFirst": true,
+    "datesRight": true,
+    "dates": {
+      "font": {
+        "family": "Calibri",
+        "generic": "sans-serif"
+      },
+      "bold": false,
+      "italic": false,
+      "size": 9,
+      "color": "#5a5a5a"
+    },
+    "locationWith": "degree",
+    "degreeSeparator": " · "
+  },
+  "version": 2
+}

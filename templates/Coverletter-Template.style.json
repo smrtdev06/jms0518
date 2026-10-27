@@ -1,0 +1,127 @@
+{
+  "kind": "cover",
+  "page": {
+    "width": 595.2,
+    "height": 841.92,
+    "top": 30.5,
+    "bottom": 30.5,
+    "left": 32.42,
+    "right": 36.19
+  },
+  "header": {
+    "name": {
+      "font": {
+        "family": "Georgia",
+        "generic": "serif"
+      },
+      "bold": true,
+      "italic": false,
+      "size": 22,
+      "color": "#1c1c1c",
+      "upper": false,
+      "align": "left",
+      "base": 52.58
+    },
+    "contact": {
+      "font": {
+        "family": "Calibri",
+        "generic": "sans-serif"
+      },
+      "bold": false,
+      "italic": false,
+      "size": 8.5,
+      "color": "#2f5d50",
+      "align": "left",
+      "gap": 16.32,
+      "separator": " | ",
+      "separatorColor": "#5a5a5a",
+      "linkColor": "#2f5d50"
+    },
+    "rule": {
+      "color": "#2f5d50",
+      "width": 2.16,
+      "offset": 11.16
+    }
+  },
+  "date": {
+    "font": {
+      "family": "Calibri",
+      "generic": "sans-serif"
+    },
+    "bold": false,
+    "italic": false,
+    "size": 10,
+    "color": "#5a5a5a",
+    "gap": 19.56
+  },
+  "recipient": {
+    "font": {
+      "family": "Calibri",
+      "generic": "sans-serif"
+    },
+    "bold": false,
+    "italic": false,
+    "size": 10,
+    "color": "#1c1c1c",
+    "gap": 22.32,
+    "line": 14.19
+  },
+  "subject": {
+    "font": {
+      "family": "Calibri",
+      "generic": "sans-serif"
+    },
+    "bold": true,
+    "italic": false,
+    "size": 10,
+    "color": "#2f5d50",
+    "gap": 14.16
+  },
+  "body": {
+    "font": {
+      "family": "Calibri",
+      "generic": "sans-serif"
+    },
+    "bold": false,
+    "italic": false,
+    "size": 10,
+    "color": "#1c1c1c",
+    "gap": 22.32,
+    "line": 14.16,
+    "paragraphGap": 21.84,
+    "justify": false
+  },
+  "bold": {
+    "font": {
+      "family": "Calibri",
+      "generic": "sans-serif"
+    },
+    "bold": true,
+    "italic": false,
+    "size": 10,
+    "color": "#1c1c1c"
+  },
+  "closing": {
+    "font": {
+      "family": "Calibri",
+      "generic": "sans-serif"
+    },
+    "bold": false,
+    "italic": false,
+    "size": 10,
+    "color": "#1c1c1c",
+    "gap": 22.08,
+    "text": "Best regards,"
+  },
+  "signature": {
+    "font": {
+      "family": "Calibri",
+      "generic": "sans-serif"
+    },
+    "bold": false,
+    "italic": false,
+    "size": 10,
+    "color": "#1c1c1c",
+    "gap": 22.08
+  }
+}
