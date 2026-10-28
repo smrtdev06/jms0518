@@ -123,6 +123,15 @@ CREATE INDEX IF NOT EXISTS jobs_applied_at_idx ON jobs (applied_at);
 CREATE INDEX IF NOT EXISTS jobs_assigned_bidder_idx ON jobs (assigned_bidder_id);
 CREATE INDEX IF NOT EXISTS jobs_assigned_caller_idx ON jobs (assigned_caller_id);
 
+-- Job links sent by the job-finding bot (POST /api/job-links). Separate from jobs: one row per link, a link that is
+-- already here is skipped.
+CREATE TABLE IF NOT EXISTS job_links (
+  id         SERIAL PRIMARY KEY,
+  job_link   TEXT NOT NULL UNIQUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS job_links_created_at_idx ON job_links (created_at);
+
 -- Files: applied screenshots (applied/<job>) and uploaded templates (templates/<file>).
 CREATE TABLE IF NOT EXISTS stored_files (
   key          TEXT PRIMARY KEY,

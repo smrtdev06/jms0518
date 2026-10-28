@@ -86,6 +86,21 @@ templates current at that moment, so a new template also applies to jobs generat
 - `fonts/` — free fonts with the same letter widths as Calibri, Cambria, Arial, Times New Roman, Courier New and Georgia,
   used where those fonts are not installed (SIL Open Font License).
 
+## Job links API (for the job-finding bot)
+
+`POST /api/job-links` takes a text with job links and saves every link to the `job_links` table (`id`, `job_link`,
+`created_at`); a link that is already there is skipped. The bot signs in with `JOB_LINKS_API_KEY` from `.env`.
+
+```bash
+curl -X POST https://<your-site>/api/job-links \
+  -H "Authorization: Bearer <JOB_LINKS_API_KEY>" -H "Content-Type: text/plain" \
+  --data-binary $'Found today:\nhttps://a.com/jobs/1\nhttps://b.com/jobs/2'
+```
+
+The body can also be JSON: `{ "text": "..." }` or `{ "links": ["https://...", ...] }` (the key may be sent as
+`X-API-Key` instead). Answer (counts only): `{ ok, received, saved, skipped }` —
+201 when something new was saved, 200 when everything was a duplicate, 401 for a wrong key.
+
 ## Hosting on Vercel
 
 1. Push the project to a GitHub repository (`.env` is never committed) and import it in Vercel (Add New → Project).
@@ -93,7 +108,7 @@ templates current at that moment, so a new template also applies to jobs generat
    `DATABASE_URL_UNPOOLED`) for you; SSL is turned on automatically by the `sslmode=require` in the URL.
 3. **Settings → Environment Variables**: add the rest of `.env` — `SESSION_SECRET` (a new long random string),
    `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `LLM_PROVIDER`, the AI key and model, `PROMPT_SYSTEM`, `PROMPT_USER`,
-   `LINKS_AT_ONCE`. Not needed there: `DB_*`, `DATABASE_SSL`, `CHROME_PATH`.
+   `LINKS_AT_ONCE`, `JOB_LINKS_API_KEY`. Not needed there: `DB_*`, `DATABASE_SSL`, `CHROME_PATH`.
 4. Deploy. Every build runs `npm run vercel-build`: `db:init` (creates or upgrades the schema and the administrator in
    the Neon database), then `next build`. Add demo users if you want them: run `npm run db:demo` locally with
    `DATABASE_URL` set to the Neon URL.
