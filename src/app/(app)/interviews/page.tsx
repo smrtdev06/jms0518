@@ -1,6 +1,6 @@
 import { can, requirePageUser } from "@/lib/auth";
 import { assigneeFilter, workProfile } from "@/lib/access";
-import { countJobs, listJobs, readListParams, type SearchParams } from "@/lib/jobs";
+import { countJobs, interviewEndedSql, listJobs, readListParams, type SearchParams } from "@/lib/jobs";
 import { FilterBar, Pagination } from "@/components/list-controls";
 import { PageTitle } from "@/components/page-title";
 import { autoAssign } from "@/lib/assign";
@@ -12,6 +12,7 @@ export const metadata = { title: "Interview Schedule" };
 
 const VIEW_OPTIONS = [
   { value: "all", label: "All" },
+  { value: "needs_result", label: "Needs result" },
   { value: "scheduled", label: "Scheduled" },
   { value: "interviewed", label: "Interviewed" },
   { value: "unscheduled", label: "Unscheduled" },
@@ -40,9 +41,11 @@ export default async function InterviewsPage({ searchParams }: { searchParams: P
   // unscheduled (just applied), offered and rejected.
   const orderBy =
     view === "all"
-      ? "array_position(ARRAY['scheduled', 'interviewed', 'unscheduled', 'offered', 'rejected'], j.interview_status), " +
+      ? // Interviews waiting for their result first: they need someone to act.
+        `NOT (j.interview_status = 'scheduled' AND ${interviewEndedSql()}), ` +
+        "array_position(ARRAY['scheduled', 'interviewed', 'unscheduled', 'offered', 'rejected'], j.interview_status), " +
         `${BY_INTERVIEW_TIME}, j.applied_at DESC NULLS LAST, j.id DESC`
-      : view === "scheduled"
+      : view === "scheduled" || view === "needs_result"
         ? `${BY_INTERVIEW_TIME}, j.id DESC`
         : "j.applied_at DESC NULLS LAST, j.id DESC";
 
@@ -53,7 +56,8 @@ export default async function InterviewsPage({ searchParams }: { searchParams: P
       page: params.page,
       size: params.size,
       applyStatus: "applied",
-      interviewStatus: view === "all" ? undefined : view,
+      interviewStatus: view === "all" ? undefined : view === "needs_result" ? "scheduled" : view,
+      interviewEnded: view === "needs_result" ? true : view === "scheduled" ? false : undefined,
       assignee,
       orderBy,
     }),
@@ -78,6 +82,7 @@ export default async function InterviewsPage({ searchParams }: { searchParams: P
         profile={profile}
         stats={[
           { label: "Scheduled", value: counts.scheduled, tone: "accent" },
+          { label: "Needs result", value: counts.needs_result, tone: "warn" },
           { label: "Interviewed", value: counts.interviewed, tone: "warn" },
           { label: "Offered", value: counts.offered, tone: "good" },
         ]}

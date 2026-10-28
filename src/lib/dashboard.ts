@@ -1,4 +1,5 @@
 import { query } from "./db";
+import { interviewEndedSql } from "./jobs";
 
 type DashboardFilter = { days: number | null; profileId: number | null };
 
@@ -7,6 +8,10 @@ const IN_RANGE = (col: string) => `(${col} IS NOT NULL AND ($1::timestamptz IS N
 // Only generated packages count as jobs (gen_status = 'done'); profile = the member the job belongs to.
 const profileFilter = (n: number) => `(j.gen_status = 'done' AND ($${n}::int IS NULL OR j.user_id = $${n}))`;
 const PROFILE = profileFilter(2);
+// Interviews held by job j in the period: its current result plus the results of its earlier rounds (each new result
+// counts once; editing a result does not add one).
+const RESULTS_IN_RANGE = `((CASE WHEN ${IN_RANGE("j.interview_result_at")} THEN 1 ELSE 0 END) +
+  (SELECT count(*)::int FROM interview_rounds r WHERE r.job_id = j.id AND ${IN_RANGE("r.result_at")}))`;
 
 export type TeamActivity = {
   id: number;
@@ -38,6 +43,7 @@ const WORK = `
   UNION ALL SELECT apply_failed_by, 'apply_failed', apply_failed_at FROM jobs WHERE apply_failed_by IS NOT NULL
   UNION ALL SELECT interview_scheduled_by, 'scheduled', scheduled_at FROM jobs WHERE interview_scheduled_by IS NOT NULL AND scheduled_at IS NOT NULL
   UNION ALL SELECT interview_result_by, 'results', interview_result_at FROM jobs WHERE interview_result_by IS NOT NULL
+  UNION ALL SELECT result_by, 'results', result_at FROM interview_rounds WHERE result_by IS NOT NULL AND result_at IS NOT NULL
   UNION ALL SELECT offered_by, 'decisions', offered_at FROM jobs WHERE offered_by IS NOT NULL
   UNION ALL SELECT rejected_by, 'decisions', rejected_at FROM jobs WHERE rejected_by IS NOT NULL`;
 
@@ -106,9 +112,13 @@ export async function loadDashboard({ days, profileId }: DashboardFilter) {
     apply_failed: number;
     waiting: number;
     scheduled: number;
+    interviews: number;
+    interviewed_jobs: number;
     offered: number;
     rejected: number;
     upcoming: number;
+    scheduled_now: number;
+    needs_result: number;
     applied_total: number;
   }>(
     `SELECT
@@ -117,9 +127,14 @@ export async function loadDashboard({ days, profileId }: DashboardFilter) {
        count(*) FILTER (WHERE ${IN_RANGE("j.apply_failed_at")})::int AS apply_failed,
        count(*) FILTER (WHERE j.apply_status = 'ready')::int AS waiting,
        count(*) FILTER (WHERE ${IN_RANGE("j.scheduled_at")})::int AS scheduled,
+       COALESCE(sum(${RESULTS_IN_RANGE}), 0)::int AS interviews,
+       count(*) FILTER (WHERE ${RESULTS_IN_RANGE} > 0)::int AS interviewed_jobs,
        count(*) FILTER (WHERE ${IN_RANGE("j.offered_at")})::int AS offered,
        count(*) FILTER (WHERE ${IN_RANGE("j.rejected_at")})::int AS rejected,
        count(*) FILTER (WHERE j.interview_status = 'scheduled' AND j.interview_start_at BETWEEN now() AND now() + interval '7 days')::int AS upcoming,
+       -- right now, whatever the period: interviews still ahead (or in progress), and ended ones waiting for a result
+       count(*) FILTER (WHERE j.apply_status = 'applied' AND j.interview_status = 'scheduled' AND NOT ${interviewEndedSql()})::int AS scheduled_now,
+       count(*) FILTER (WHERE j.apply_status = 'applied' AND j.interview_status = 'scheduled' AND ${interviewEndedSql()})::int AS needs_result,
        count(*) FILTER (WHERE j.apply_status = 'applied')::int AS applied_total
      FROM jobs j WHERE ${PROFILE}`,
     params,
@@ -152,6 +167,8 @@ export async function loadDashboard({ days, profileId }: DashboardFilter) {
     offered: number;
     rejected: number;
     interviewed: number;
+    interviews: number;
+    scheduled_now: number;
     last_applied: string | null;
     team_size: number;
   }>(
@@ -165,7 +182,10 @@ export async function loadDashboard({ days, profileId }: DashboardFilter) {
        count(j.id) FILTER (WHERE ${IN_RANGE("j.applied_at")} AND j.interview_status = 'interviewed')::int AS interviewed_step,
        count(j.id) FILTER (WHERE ${IN_RANGE("j.applied_at")} AND j.interview_status = 'offered')::int AS offered,
        count(j.id) FILTER (WHERE ${IN_RANGE("j.applied_at")} AND j.interview_status = 'rejected')::int AS rejected,
-       count(j.id) FILTER (WHERE ${IN_RANGE("j.applied_at")} AND j.interview_status <> 'unscheduled')::int AS interviewed,
+       -- jobs that had at least one interview in the period, and how many interviews were held
+       count(j.id) FILTER (WHERE ${RESULTS_IN_RANGE} > 0)::int AS interviewed,
+       COALESCE(sum(${RESULTS_IN_RANGE}) FILTER (WHERE j.id IS NOT NULL), 0)::int AS interviews,
+       count(j.id) FILTER (WHERE j.apply_status = 'applied' AND j.interview_status = 'scheduled' AND NOT ${interviewEndedSql()})::int AS scheduled_now,
        max(j.applied_at) AS last_applied
      FROM users p
      LEFT JOIN jobs j ON j.user_id = p.id AND j.gen_status = 'done'

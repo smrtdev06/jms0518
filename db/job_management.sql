@@ -123,6 +123,37 @@ CREATE INDEX IF NOT EXISTS jobs_applied_at_idx ON jobs (applied_at);
 CREATE INDEX IF NOT EXISTS jobs_assigned_bidder_idx ON jobs (assigned_bidder_id);
 CREATE INDEX IF NOT EXISTS jobs_assigned_caller_idx ON jobs (assigned_caller_id);
 
+-- Earlier interview rounds of a job. When an Interviewed job is rescheduled (the next round), its result moves here
+-- with that round's schedule, and the job starts the new round without a result. Every result — current or here —
+-- counts as one interview held, and as work of the user who wrote it.
+CREATE TABLE IF NOT EXISTS interview_rounds (
+  id                 SERIAL PRIMARY KEY,
+  job_id             INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+  round              INTEGER NOT NULL,
+  interview_date     DATE,
+  interview_start    TIME,
+  interview_end      TIME,
+  interview_timezone TEXT NOT NULL DEFAULT 'America/New_York',
+  outcome            TEXT NOT NULL DEFAULT '' CHECK (outcome IN ('', 'positive', 'neutral', 'negative')),
+  note               TEXT NOT NULL DEFAULT '',
+  result_at          TIMESTAMPTZ,
+  result_by          INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  archived_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS interview_rounds_job_idx ON interview_rounds (job_id);
+CREATE INDEX IF NOT EXISTS interview_rounds_result_at_idx ON interview_rounds (result_at);
+
+-- Upgrade: before rounds existed, a rescheduled interview kept its old result while Scheduled again. Move such a
+-- result into the history (its old schedule is unknown). No-op once done: a Scheduled job no longer keeps a result.
+WITH moved AS (
+  INSERT INTO interview_rounds (job_id, round, outcome, note, result_at, result_by)
+  SELECT id, 1, interview_result_outcome, interview_result_note, interview_result_at, interview_result_by
+  FROM jobs WHERE interview_status = 'scheduled' AND interview_result_outcome <> ''
+  RETURNING job_id
+)
+UPDATE jobs SET interview_result_outcome = '', interview_result_note = '', interview_result_at = NULL, interview_result_by = NULL
+WHERE id IN (SELECT job_id FROM moved);
+
 -- Job links sent by the job-finding bot (POST /api/job-links). Separate from jobs: one row per link, a link that is
 -- already here is skipped.
 CREATE TABLE IF NOT EXISTS job_links (

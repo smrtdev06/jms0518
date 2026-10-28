@@ -1,8 +1,16 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
+// Inter ships with the app (variable weights 100–900, Latin; SIL OFL, see fonts/LICENSE-inter.txt), so starting or
+// building never depends on reaching Google Fonts.
+const inter = localFont({
+  src: "./fonts/inter-latin-variable.woff2",
+  weight: "100 900",
+  style: "normal",
+  display: "swap",
+  variable: "--font-inter",
+});
 
 export const metadata: Metadata = {
   title: { default: "Job Management System", template: "%s · Job Management" },

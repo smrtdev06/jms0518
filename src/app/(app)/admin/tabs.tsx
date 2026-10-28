@@ -3,14 +3,16 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import clsx from "clsx";
-import { Briefcase, FileStack, ScrollText, Settings, Users } from "lucide-react";
+import { Bot, Briefcase, DatabaseBackup, FileStack, ScrollText, Settings, Users } from "lucide-react";
 
 const TABS = [
   { href: "/admin/users", label: "Users", icon: Users },
   { href: "/admin/jobs", label: "Job links", icon: Briefcase },
+  { href: "/admin/bot-links", label: "Bot links", icon: Bot },
   { href: "/admin/templates", label: "Templates", icon: FileStack },
   { href: "/admin/activity", label: "Activity log", icon: ScrollText },
   { href: "/admin/settings", label: "Settings", icon: Settings },
+  { href: "/admin/backup", label: "Backup", icon: DatabaseBackup },
 ];
 
 export function AdminTabs() {

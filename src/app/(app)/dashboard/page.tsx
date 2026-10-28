@@ -31,19 +31,32 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const members = data.team.filter((t) => t.role === "member");
   const helpers = data.team.filter((t) => t.role !== "member");
   const focused = profileId ? members.find((m) => m.id === profileId) : undefined;
-  const interviewed = kpis.scheduled;
+  // Interviews held = results recorded (every round counts); rates use the jobs that had an interview.
+  const interviewed = kpis.interviewed_jobs;
   const rangeLabel = range === "all" ? "all time" : `last ${range} days`;
   const scopeLabel = boss ? (selected ? `${selected.name}${selected.label ? ` (${selected.label})` : ""}` : "All members") : "Your profile and team";
 
-  const tiles = [
+  const tiles: { label: string; value: number; hint: string; title?: string }[] = [
     { label: "Jobs generated", value: kpis.received, hint: rangeLabel },
     { label: "Applied", value: kpis.applied, hint: `${pct(kpis.applied, kpis.received)} of generated` },
     { label: "Waiting to apply", value: kpis.waiting, hint: "right now" },
     { label: "Apply failed", value: kpis.apply_failed, hint: rangeLabel },
-    { label: "Interviews", value: interviewed, hint: `${pct(interviewed, kpis.applied)} of applied` },
+    {
+      label: "Interviews",
+      value: kpis.interviews,
+      hint: `${interviewed} ${interviewed === 1 ? "job" : "jobs"} · ${pct(interviewed, kpis.applied)}`,
+      title: `${kpis.interviews} interviews held (every round) for ${interviewed} jobs · ${pct(interviewed, kpis.applied)} of applied jobs · ${rangeLabel}`,
+    },
     { label: "Offers", value: kpis.offered, hint: `${pct(kpis.offered, interviewed)} of interviews` },
     { label: "Rejected", value: kpis.rejected, hint: rangeLabel },
-    { label: "Next 7 days", value: kpis.upcoming, hint: "scheduled interviews" },
+    {
+      label: "Scheduled",
+      value: kpis.scheduled_now,
+      hint: kpis.needs_result ? `+${kpis.needs_result} need a result` : `${kpis.upcoming} in next 7 days`,
+      title:
+        `${kpis.scheduled_now} interviews scheduled right now (upcoming or in progress) · ${kpis.upcoming} in the next 7 days` +
+        (kpis.needs_result ? ` · ${kpis.needs_result} more already ended and need a result` : ""),
+    },
   ];
 
   return (
@@ -56,7 +69,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
       <section className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-8">
         {tiles.map((t) => (
-          <div key={t.label} className="card px-4 py-3">
+          <div key={t.label} className="card px-4 py-3" title={t.title ?? `${t.label}: ${t.hint}`}>
             <div className="text-xs text-muted">{t.label}</div>
             <div className="mt-1 text-2xl font-semibold tracking-tight">{t.value.toLocaleString()}</div>
             <div className="mt-0.5 truncate text-[11px] text-faint">{t.hint}</div>
@@ -116,7 +129,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         subtitle={boss ? `Applying and interview results per member (profile) · ${rangeLabel}` : `Applying and interview results · ${rangeLabel}`}
       >
         <div className="-mx-4 overflow-x-auto">
-          <table className="w-full min-w-[820px] text-sm">
+          <table className="w-full min-w-[900px] text-sm">
             <thead>
               <tr className="border-b border-line text-left text-xs text-muted">
                 <Th>Profile</Th>
@@ -125,6 +138,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 <Th right>Waiting</Th>
                 <Th right>Applied</Th>
                 <Th right>Apply rate</Th>
+                <Th right>Scheduled</Th>
                 <Th right>Interviews</Th>
                 <Th right>Interview rate</Th>
                 <Th right>Offers</Th>
@@ -145,7 +159,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                   <Td right>{p.waiting}</Td>
                   <Td right>{p.applied}</Td>
                   <Td right>{pct(p.applied, p.received)}</Td>
-                  <Td right>{p.interviewed}</Td>
+                  <Td right>{p.scheduled_now}</Td>
+                  <Td right>{p.interviews}</Td>
                   <Td right>{pct(p.interviewed, p.applied)}</Td>
                   <Td right>{p.offered}</Td>
                   <Td right>{pct(p.offered, p.interviewed)}</Td>
@@ -157,7 +172,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               ))}
               {data.profiles.length === 0 && (
                 <tr>
-                  <td colSpan={12} className="py-8 text-center text-xs text-faint">
+                  <td colSpan={13} className="py-8 text-center text-xs text-faint">
                     {boss ? "No members with a profile yet" : "Save your profile in Resume Tailor to see results"}
                   </td>
                 </tr>

@@ -38,7 +38,34 @@ export type JobRow = {
   rejected_by_name: string | null;
   assigned_bidder_name: string | null;
   assigned_caller_name: string | null;
+  /** earlier rounds (oldest first); the current round's result is interview_result_* */
+  interview_rounds: InterviewRound[];
 };
+
+export type InterviewRound = {
+  round: number;
+  date: string | null;
+  start: string | null;
+  end: string | null;
+  timezone: string;
+  outcome: "" | "positive" | "neutral" | "negative";
+  note: string;
+  result_at: string | null;
+  result_by_name: string | null;
+};
+
+/**
+ * SQL: the interview has ended (no end time: one hour after the start; no start time: the end of that day).
+ * A Scheduled interview that has ended is shown as "Needs Result" until the caller adds the result.
+ */
+export function interviewEndedSql(alias = "j") {
+  const c = (col: string) => (alias ? `${alias}.${col}` : col);
+  return `(${c("interview_date")} IS NOT NULL AND now() >= CASE
+      WHEN ${c("interview_end")} IS NOT NULL THEN (${c("interview_date")} + ${c("interview_end")}) AT TIME ZONE ${c("interview_timezone")}
+      WHEN ${c("interview_start")} IS NOT NULL THEN ((${c("interview_date")} + ${c("interview_start")}) AT TIME ZONE ${c("interview_timezone")}) + interval '1 hour'
+      ELSE (${c("interview_date")} + time '23:59') AT TIME ZONE ${c("interview_timezone")}
+    END)`;
+}
 
 export type AssigneeFilter = { column: "assigned_bidder_id" | "assigned_caller_id"; userId: number | null };
 
@@ -82,7 +109,13 @@ const SELECT = `
   j.offered_at, (SELECT COALESCE(NULLIF(x.display_name, ''), x.username) FROM users x WHERE x.id = j.offered_by) AS offered_by_name,
   j.rejected_at, (SELECT COALESCE(NULLIF(x.display_name, ''), x.username) FROM users x WHERE x.id = j.rejected_by) AS rejected_by_name,
   (SELECT COALESCE(NULLIF(x.display_name, ''), x.username) FROM users x WHERE x.id = j.assigned_bidder_id) AS assigned_bidder_name,
-  (SELECT COALESCE(NULLIF(x.display_name, ''), x.username) FROM users x WHERE x.id = j.assigned_caller_id) AS assigned_caller_name`;
+  (SELECT COALESCE(NULLIF(x.display_name, ''), x.username) FROM users x WHERE x.id = j.assigned_caller_id) AS assigned_caller_name,
+  (SELECT COALESCE(json_agg(json_build_object(
+      'round', r.round, 'date', to_char(r.interview_date, 'YYYY-MM-DD'), 'start', to_char(r.interview_start, 'HH24:MI'),
+      'end', to_char(r.interview_end, 'HH24:MI'), 'timezone', r.interview_timezone, 'outcome', r.outcome, 'note', r.note,
+      'result_at', r.result_at,
+      'result_by_name', (SELECT COALESCE(NULLIF(x.display_name, ''), x.username) FROM users x WHERE x.id = r.result_by)
+    ) ORDER BY r.round), '[]'::json) FROM interview_rounds r WHERE r.job_id = j.id) AS interview_rounds`;
 
 const FROM = `
   FROM jobs j
@@ -98,6 +131,8 @@ export async function listJobs(opts: {
   size: number;
   applyStatus?: "ready" | "applied" | "failed";
   interviewStatus?: string;
+  /** with interviewStatus "scheduled": true = only ended ones (Needs Result), false = only upcoming / in progress */
+  interviewEnded?: boolean;
   /** only the jobs assigned to one bidder / caller (userId null: the unassigned ones) */
   assignee?: AssigneeFilter;
   orderBy: string;
@@ -114,6 +149,7 @@ export async function listJobs(opts: {
     params.push(opts.interviewStatus);
     where.push(`j.interview_status = $${params.length}`);
   }
+  if (opts.interviewEnded !== undefined) where.push(opts.interviewEnded ? interviewEndedSql() : `NOT ${interviewEndedSql()}`);
   if (opts.assignee) where.push(assigneeSql(opts.assignee, params));
   if (opts.q) {
     params.push(`%${opts.q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`);
@@ -136,7 +172,7 @@ function serialize(row: JobRow): JobRow {
     scheduled_at: iso(row.scheduled_at), offered_at: iso(row.offered_at), rejected_at: iso(row.rejected_at) };
 }
 
-type JobCounts = Record<"ready" | "applied" | "failed" | "unscheduled" | "scheduled" | "interviewed" | "offered" | "rejected", number>;
+type JobCounts = Record<"ready" | "applied" | "failed" | "unscheduled" | "scheduled" | "needs_result" | "interviewed" | "offered" | "rejected", number>;
 
 // How many of the profile's jobs (only the ones assigned to a bidder / caller, for them) are at each step.
 export async function countJobs(profileId: number | null, assignee?: AssigneeFilter) {
@@ -148,7 +184,8 @@ export async function countJobs(profileId: number | null, assignee?: AssigneeFil
        count(*) FILTER (WHERE apply_status = 'applied')::int AS applied,
        count(*) FILTER (WHERE apply_status = 'failed')::int AS failed,
        count(*) FILTER (WHERE apply_status = 'applied' AND interview_status = 'unscheduled')::int AS unscheduled,
-       count(*) FILTER (WHERE apply_status = 'applied' AND interview_status = 'scheduled')::int AS scheduled,
+       count(*) FILTER (WHERE apply_status = 'applied' AND interview_status = 'scheduled' AND NOT ${interviewEndedSql()})::int AS scheduled,
+       count(*) FILTER (WHERE apply_status = 'applied' AND interview_status = 'scheduled' AND ${interviewEndedSql()})::int AS needs_result,
        count(*) FILTER (WHERE apply_status = 'applied' AND interview_status = 'interviewed')::int AS interviewed,
        count(*) FILTER (WHERE apply_status = 'applied' AND interview_status = 'offered')::int AS offered,
        count(*) FILTER (WHERE apply_status = 'applied' AND interview_status = 'rejected')::int AS rejected

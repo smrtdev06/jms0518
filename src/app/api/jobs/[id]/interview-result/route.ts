@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { audit, queryOne } from "@/lib/db";
 import { can, requireApiUser, HttpError } from "@/lib/auth";
 import { assertJobAccess } from "@/lib/access";
+import { interviewEndedSql } from "@/lib/jobs";
 import { autoAssign } from "@/lib/assign";
 import { parseId, readJson, route, str } from "@/lib/http";
 
@@ -25,22 +26,19 @@ export const PUT = route<Ctx>(async (request, { params }) => {
   // no start time: the end of that day; no date: any time).
   if (!clearing) {
     const timing = await queryOne<{ ended: boolean }>(
-      `SELECT (interview_date IS NULL OR now() >= CASE
-                 WHEN interview_end IS NOT NULL THEN (interview_date + interview_end) AT TIME ZONE interview_timezone
-                 WHEN interview_start IS NOT NULL THEN ((interview_date + interview_start) AT TIME ZONE interview_timezone) + interval '1 hour'
-                 ELSE (interview_date + time '23:59') AT TIME ZONE interview_timezone
-               END) AS ended
-       FROM jobs WHERE id = $1`,
+      `SELECT (interview_date IS NULL OR ${interviewEndedSql("")}) AS ended FROM jobs WHERE id = $1`,
       [jobId],
     );
     if (timing && !timing.ended) throw new HttpError(409, "The result can be added after the interview ends");
   }
 
-  // Saving a result moves a scheduled interview to "interviewed"; removing it moves it back.
+  // A new result moves a scheduled interview to "interviewed" and records who wrote it and when (one interview held,
+  // counted as that user's work). Editing an existing result changes only its text: no new work is counted.
+  // Removing the result moves the interview back to scheduled.
   const row = await queryOne<{ interview_status: string }>(
     `UPDATE jobs SET interview_result_outcome = $2, interview_result_note = $3,
-       interview_result_at = CASE WHEN $4 THEN NULL ELSE now() END,
-       interview_result_by = CASE WHEN $4 THEN NULL ELSE $5::int END,
+       interview_result_at = CASE WHEN $4 THEN NULL WHEN interview_result_outcome <> '' THEN interview_result_at ELSE now() END,
+       interview_result_by = CASE WHEN $4 THEN NULL WHEN interview_result_outcome <> '' THEN interview_result_by ELSE $5::int END,
        interview_status = CASE
          WHEN NOT $4 AND interview_status = 'scheduled' THEN 'interviewed'
          WHEN $4 AND interview_status = 'interviewed' THEN 'scheduled'

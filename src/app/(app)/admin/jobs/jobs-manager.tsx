@@ -19,6 +19,7 @@ type Job = {
   apply_status: string;
   apply_fail_reason: string;
   interview_status: string;
+  needs_result: boolean;
   created_at: string;
   applied_by: string | null;
   has_resume: boolean;
@@ -162,7 +163,7 @@ export function JobsManager({ jobs, profiles, filters }: { jobs: Job[]; profiles
                   )}
                   {j.applied_by && <div className="mt-0.5 text-[11px] text-faint">by {j.applied_by}</div>}
                 </Td>
-                <Td>{j.gen_status === "done" && j.apply_status === "applied" ? <StatusBadge status={j.interview_status} /> : <span className="text-xs text-faint">—</span>}</Td>
+                <Td>{j.gen_status === "done" && j.apply_status === "applied" ? <StatusBadge status={j.needs_result ? "needs_result" : j.interview_status} /> : <span className="text-xs text-faint">—</span>}</Td>
                 <Td className="whitespace-nowrap text-xs text-muted">{formatDateTime(j.created_at)}</Td>
                 <Td className="text-right">
                   <div className="flex justify-end gap-1">

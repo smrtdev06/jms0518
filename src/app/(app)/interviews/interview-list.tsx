@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
-import { CalendarClock, ChevronDown, LoaderCircle, Lock, MessageSquareText, Pencil, Save, Trash2, X } from "lucide-react";
-import type { JobRow } from "@/lib/jobs";
+import { CalendarClock, ChevronDown, History, LoaderCircle, Lock, MessageSquareText, Pencil, Save, Trash2, X } from "lucide-react";
+import type { InterviewRound, JobRow } from "@/lib/jobs";
 import { TIMEZONES, formatInterviewRange, timezoneLabel } from "@/lib/timezones";
 import { StatusBadge } from "@/components/status-badge";
 import { DocButton, EmptyState, JobHeading, JobThumb, isBlankClick, timeAgo } from "@/components/job-parts";
@@ -35,7 +35,7 @@ export function InterviewList({ jobs, canEdit }: { jobs: JobRow[]; canEdit: bool
                 <div className="flex items-center gap-2">
                   <ChevronDown className={clsx("size-4 text-faint transition", open && "rotate-180")} />
                   {job.interview_result_outcome && <ResultChip outcome={job.interview_result_outcome} />}
-                  <StatusBadge status={job.interview_status} />
+                  <InterviewStatus job={job} />
                 </div>
                 <DocButton job={job} type="resume" />
               </div>
@@ -55,7 +55,7 @@ function WhenLabel({ job }: { job: JobRow }) {
   // Offered / rejected interviews are decided, so their time no longer needs attention.
   const timing =
     slot && now && !["offered", "rejected"].includes(job.interview_status)
-      ? interviewTiming(slot, now, Boolean(job.interview_result_outcome))
+      ? interviewTiming(slot, now, job.interview_status !== "scheduled" && Boolean(job.interview_result_outcome))
       : null;
   const local = slot ? slot.start.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "";
   return (
@@ -238,6 +238,7 @@ function Details({ job, canEdit }: { job: JobRow; canEdit: boolean }) {
       </div>
       {error && <p className="mt-2 text-xs text-rose-300">{error}</p>}
       {job.interview_status !== "unscheduled" && <ResultSection job={job} />}
+      {job.interview_rounds.length > 0 && <PreviousRounds rounds={job.interview_rounds} />}
       <StepHistory job={job} />
     </div>
   );
@@ -345,7 +346,9 @@ function ResultSection({ job }: { job: JobRow }) {
   return (
     <div className="mt-4 border-t border-line/60 pt-3">
       <div className="mb-2 flex items-center justify-between">
-        <span className="text-[11px] font-medium uppercase tracking-wide text-faint">Interview result</span>
+        <span className="text-[11px] font-medium uppercase tracking-wide text-faint">
+          Interview result{job.interview_rounds.length ? ` · round ${job.interview_rounds.length + 1}` : ""}
+        </span>
         {!editing && saved && ended && (
           <button type="button" className="btn btn-ghost h-7 px-2" onClick={start}>
             <Pencil className="size-3.5" /> Edit
@@ -440,6 +443,42 @@ function ResultSection({ job }: { job: JobRow }) {
   );
 }
 
+// The results of earlier rounds, kept when the interview was rescheduled for the next round (newest first).
+function PreviousRounds({ rounds }: { rounds: InterviewRound[] }) {
+  return (
+    <div className="mt-4 border-t border-line/60 pt-3">
+      <div className="mb-2 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-faint">
+        <History className="size-3.5" /> Previous rounds
+      </div>
+      <ol className="space-y-2">
+        {[...rounds].reverse().map((r) => {
+          const o = r.outcome ? OUTCOMES[r.outcome] : null;
+          return (
+            <li key={r.round} className="flex gap-3 rounded-lg border border-line bg-surface-2/40 px-3 py-2">
+              <span className="mt-0.5 shrink-0 rounded bg-surface-3 px-1.5 text-[10px] font-medium tabular-nums text-muted">Round {r.round}</span>
+              <div className="min-w-0 flex-1 text-xs">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                  {o && (
+                    <span className="inline-flex items-center gap-1.5 font-medium">
+                      <span className={clsx("size-2 rounded-full", o.dot)} />
+                      {o.label}
+                    </span>
+                  )}
+                  <span className="text-faint" suppressHydrationWarning>
+                    {r.date ? formatInterviewRange(r.date, r.start, r.end, r.timezone) : "earlier round"}
+                    {r.result_at ? ` · result by ${r.result_by_name ?? "someone"} · ${timeAgo(r.result_at)}` : ""}
+                  </span>
+                </div>
+                {r.note && <p className="mt-1 whitespace-pre-wrap break-words leading-relaxed text-fg/80">{r.note}</p>}
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+    </div>
+  );
+}
+
 function Field({ label, className, children }: { label: string; className?: string; children: React.ReactNode }) {
   return (
     <div className={clsx("flex min-w-0 flex-col gap-1", className)}>
@@ -450,3 +489,12 @@ function Field({ label, className, children }: { label: string; className?: stri
 }
 
 const Empty = () => <span className="text-faint">—</span>;
+
+// Scheduled becomes "Needs Result" as soon as the interview has ended (the caller has not added the result yet);
+// re-checked every 30 seconds, so the badge changes without a reload.
+function InterviewStatus({ job }: { job: JobRow }) {
+  const now = useNow();
+  const slot = interviewWindow(job);
+  const ended = job.interview_status === "scheduled" && slot && now && now >= slot.end;
+  return <StatusBadge status={ended ? "needs_result" : job.interview_status} />;
+}

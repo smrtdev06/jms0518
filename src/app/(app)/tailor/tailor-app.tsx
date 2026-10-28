@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import clsx from "clsx";
-import { AlertTriangle, Check, CheckCircle2, ChevronDown, Download, Eraser, ExternalLink, FileArchive, FileText, LoaderCircle, Mail, Pencil, Sparkles, X } from "lucide-react";
+import { AlertTriangle, Check, CheckCircle2, ChevronDown, Database, Download, Eraser, ExternalLink, FileArchive, FileText, LoaderCircle, Mail, Pencil, Sparkles, X } from "lucide-react";
 import type { JobRecord, JobStep, PublicProfile } from "@/lib/tailor/types";
 import { useRouter } from "next/navigation";
 import { PageTitle } from "@/components/page-title";
@@ -42,6 +42,8 @@ export function TailorApp({ profile, initialJobs, keyReady, keyName }: { profile
   const [error, setError] = useState("");
   const [starting, setStarting] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [fetchingLinks, setFetchingLinks] = useState(false);
+  const [dbNote, setDbNote] = useState("");
   const [downloadingAll, setDownloadingAll] = useState(false);
   const [connection, setConnection] = useState("");
   // Bumped by Generate and Clear, so a progress answer that was already on its way is ignored.
@@ -99,6 +101,7 @@ export function TailorApp({ profile, initialJobs, keyReady, keyName }: { profile
   async function generate(event: React.FormEvent) {
     event.preventDefault();
     setError("");
+    setDbNote("");
     setStarting(true);
     setFinished(null);
     // Ask once, while the member is here, so the "done" notification can reach them in another tab.
@@ -120,6 +123,39 @@ export function TailorApp({ profile, initialJobs, keyReady, keyName }: { profile
       setError("Could not reach the server.");
     } finally {
       setStarting(false);
+    }
+  }
+
+  // "Get from DB": the links the bot saved (job_links), one per line, added to what is already in the box.
+  async function getFromDb() {
+    setError("");
+    setDbNote("");
+    setFetchingLinks(true);
+    try {
+      const data = await readResponse(await fetch("/api/tailor/job-links", { cache: "no-store" }));
+      if (!data.ok) {
+        setError(data.error || "Could not read the job links.");
+        return;
+      }
+      const stored = data.links as string[];
+      const current = urls.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+      const inBox = new Set(current);
+      const added = stored.filter((link) => !inBox.has(link));
+      if (added.length) setUrls([...current, ...added].join("\n"));
+      const registered = Number(data.skipped) || 0;
+      setDbNote(
+        added.length
+          ? `Added ${added.length} ${added.length === 1 ? "link" : "links"} from the database${registered ? ` (${registered} already registered left out)` : ""}.`
+          : stored.length
+            ? "Every link from the database is already in the box."
+            : registered
+              ? `No new links in the database — all ${registered} are already registered.`
+              : "No job links in the database yet.",
+      );
+    } catch {
+      setError("Could not reach the server.");
+    } finally {
+      setFetchingLinks(false);
     }
   }
 
@@ -187,9 +223,21 @@ export function TailorApp({ profile, initialJobs, keyReady, keyName }: { profile
       <div className="space-y-5">
         <form onSubmit={generate} className="card flex flex-col gap-3 p-4">
           <div className="flex items-start justify-between gap-3">
-            <div>
-              <h2 className="text-sm font-semibold">Job URLs</h2>
-              <p className="mt-0.5 text-xs text-muted">One link per line. Already registered links are skipped.</p>
+            <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
+              <div>
+                <h2 className="text-sm font-semibold">Job URLs</h2>
+                <p className="mt-0.5 text-xs text-muted">One link per line. Already registered links are skipped.</p>
+              </div>
+              <button
+                type="button"
+                className="btn btn-secondary h-8 px-3 text-xs"
+                onClick={getFromDb}
+                disabled={fetchingLinks || starting || busy}
+                title={busy ? "Wait until the current batch is finished" : "Put the job links the bot saved in the database into this box"}
+              >
+                {fetchingLinks ? <LoaderCircle className="size-3.5 animate-spin" /> : <Database className="size-3.5" />}
+                Get from DB
+              </button>
             </div>
             <span className="shrink-0 rounded-full border border-line px-2 py-0.5 text-[11px] text-muted" aria-live="polite">
               {links.length} {links.length === 1 ? "link" : "links"}
@@ -210,6 +258,7 @@ export function TailorApp({ profile, initialJobs, keyReady, keyName }: { profile
           {!keyReady && (
             <p className="rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-200">Set {keyName} in .env before generating.</p>
           )}
+          {dbNote && <p className="rounded-lg border border-line bg-surface-2/60 px-3 py-2 text-xs text-muted" aria-live="polite">{dbNote}</p>}
           {connection && <p className="rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-200">{connection}</p>}
           {error && <p className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300" role="alert">{error}</p>}
           <div className="flex flex-wrap items-center gap-2">

@@ -62,17 +62,21 @@ and Interview Schedule by **caller** (or show only the unassigned jobs).
    within the cooldown (30 days by default). Scope and cooldown: Administrator → Settings.
 3. **Applying Management** — every generated package is a *Ready to Apply* job. Bidders download the resume /
    cover letter (built on download), apply, and drop or paste the confirmation screenshot → *Applied*.
-4. **Interview Schedule** — members fill in the interview details (→ *Scheduled*), then Offered → Rejected.
-   Callers see the schedule and details.
+4. **Interview Schedule** — members fill in the interview details (→ *Scheduled*). Once the interview has ended it
+   shows as *Needs Result* until the caller (or member) adds the result → *Interviewed*; then Offered → Rejected.
+   Rescheduling an Interviewed job (new date/time) starts the next round: the finished round's result is kept under
+   *Previous rounds* (`interview_rounds`) and the new round needs its own result. Every new result counts as one
+   interview held and as work of the user who wrote it; editing a result does not.
 
 **Clear** on the Resume Tailor only empties the board; generated jobs stay in Applying Management.
 
 ## Data
 
 One database: `users` (accounts + tailor profiles), `jobs` (tailoring, applying and interview data for every link),
+`interview_rounds` (earlier interview rounds of a job), `job_links` (links sent by the job-finding bot),
 `stored_files` (applied screenshots, uploaded templates), `settings`, `audit_logs`.
 
-Generation saves only the AI's resume and cover letter content (`jobs.tailored`, plus the raw reply in `jobs.ai_reply`).
+Generation saves only the AI's resume and cover letter content (`jobs.tailored`).
 The resume PDF, cover letter PDF, package ZIP and **Download all** ZIP are built when they are downloaded, with the
 templates current at that moment, so a new template also applies to jobs generated earlier.
 
@@ -100,6 +104,17 @@ curl -X POST https://<your-site>/api/job-links \
 The body can also be JSON: `{ "text": "..." }` or `{ "links": ["https://...", ...] }` (the key may be sent as
 `X-API-Key` instead). Answer (counts only): `{ ok, received, saved, skipped }` —
 201 when something new was saved, 200 when everything was a duplicate, 401 for a wrong key.
+
+Administrator → **Bot links** lists the `job_links` table: search, add links by pasting a text, delete selected links or
+all of them; the *Tailored* column shows how many profiles already have a job with that exact link.
+
+## Backup and restore
+
+Administrator → **Backup** downloads the whole database as one `jms-backup-<date>.json.gz` file (every table, including
+screenshots and uploaded templates) and restores such a file. Restoring replaces every table in one transaction — an
+error leaves the database as it was — and is refused for a file without an active administrator. It works on Vercel
+too (no `pg_dump` needed); there a request can carry at most about 4.5 MB, so very large backups restore locally
+(`npm run dev` with `DATABASE_URL` pointing at the hosted database).
 
 ## Hosting on Vercel
 

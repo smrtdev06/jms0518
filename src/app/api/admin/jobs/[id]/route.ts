@@ -53,6 +53,7 @@ export const PATCH = route<Ctx>(async (request, { params }) => {
     );
     if (applyStatus === "ready" && current.apply_status === "applied") {
       await db.query("DELETE FROM stored_files WHERE key = $1", [appliedKey(id)]);
+      await db.query("DELETE FROM interview_rounds WHERE job_id = $1", [id]);
       await db.query(
         `UPDATE jobs SET apply_status = 'ready', applied_at = NULL, applied_by = NULL, interview_status = 'unscheduled',
            interview_email = '', interview_note = '', interview_date = NULL, interview_start = NULL, interview_end = NULL,

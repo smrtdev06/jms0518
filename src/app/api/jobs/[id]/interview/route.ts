@@ -11,8 +11,10 @@ type Ctx = { params: Promise<{ id: string }> };
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME = /^\d{2}:\d{2}(:\d{2})?$/;
 
-// PUT: save the interview details. Any detail present => Scheduled (an interviewed job is scheduled again,
-// e.g. for the next round); all cleared => Unscheduled. Offered is kept; Rejected can no longer be edited.
+// PUT: save the interview details. Any detail present => Scheduled; all cleared => Unscheduled.
+// An Interviewed job goes back to Scheduled only when its date, time or timezone changes (the next round: its result
+// moves into interview_rounds) — editing just the email or note keeps it Interviewed. Offered is kept; Rejected can no longer be edited.
+// (A Scheduled interview whose time has passed shows as "Needs Result" until the caller adds the result.)
 export const PUT = route<Ctx>(async (request, { params }) => {
   const user = await requireApiUser(can.editInterviews);
   const jobId = parseId((await params).id);
@@ -37,20 +39,44 @@ export const PUT = route<Ctx>(async (request, { params }) => {
   const startAt = date ? zonedToUtc(date, start || "00:00", timezone) : null;
 
   await transaction(async (db) => {
-    const { rows } = await db.query("SELECT interview_status FROM jobs WHERE id = $1 FOR UPDATE", [jobId]);
+    const { rows } = await db.query(
+      `SELECT interview_status, COALESCE(to_char(interview_date, 'YYYY-MM-DD'), '') AS date,
+         COALESCE(to_char(interview_start, 'HH24:MI'), '') AS start, COALESCE(to_char(interview_end, 'HH24:MI'), '') AS "end", interview_timezone AS timezone
+       FROM jobs WHERE id = $1 FOR UPDATE`,
+      [jobId],
+    );
     const current = rows[0].interview_status as string;
     // Rejected is final: its details can no longer change (the result note still can).
     if (current === "rejected") throw new HttpError(409, "A rejected interview can no longer be edited");
-    const next = current === "offered" ? current : hasInfo ? "scheduled" : "unscheduled";
+    const was = rows[0] as { date: string; start: string; end: string; timezone: string };
+    const rescheduled = was.date !== date || was.start !== start.slice(0, 5) || was.end !== end.slice(0, 5) || was.timezone !== timezone;
+    const next =
+      current === "offered" ? current : !hasInfo ? "unscheduled" : current === "interviewed" && !rescheduled ? "interviewed" : "scheduled";
+    // The next round: the finished round (its schedule and result) goes into the history, and the job starts the
+    // new round without a result, so the caller writes a new one.
+    const archived = current === "interviewed" && next !== "interviewed";
+    if (archived) {
+      await db.query(
+        `INSERT INTO interview_rounds (job_id, round, interview_date, interview_start, interview_end, interview_timezone, outcome, note, result_at, result_by)
+         SELECT id, (SELECT COUNT(*) + 1 FROM interview_rounds WHERE job_id = $1), interview_date, interview_start, interview_end, interview_timezone,
+           interview_result_outcome, interview_result_note, interview_result_at, interview_result_by
+         FROM jobs WHERE id = $1`,
+        [jobId],
+      );
+    }
     await db.query(
       `UPDATE jobs SET interview_email = $2, interview_note = $3, interview_date = $4, interview_start = $5,
          interview_end = $6, interview_timezone = $7, interview_start_at = $8, interview_status = $9,
          scheduled_at = CASE WHEN $9 = 'scheduled' THEN COALESCE(scheduled_at, now()) ELSE scheduled_at END,
          -- who scheduled / last edited the interview details (cleared with the details)
          interview_scheduled_by = CASE WHEN $9 = 'unscheduled' THEN NULL ELSE $10::int END,
+         interview_result_outcome = CASE WHEN $11 THEN '' ELSE interview_result_outcome END,
+         interview_result_note = CASE WHEN $11 THEN '' ELSE interview_result_note END,
+         interview_result_at = CASE WHEN $11 THEN NULL ELSE interview_result_at END,
+         interview_result_by = CASE WHEN $11 THEN NULL ELSE interview_result_by END,
          updated_at = now()
        WHERE id = $1`,
-      [jobId, email, note, date || null, start || null, end || null, timezone, startAt, next, user.id],
+      [jobId, email, note, date || null, start || null, end || null, timezone, startAt, next, user.id, archived],
     );
   });
   await autoAssign(job.user_id);

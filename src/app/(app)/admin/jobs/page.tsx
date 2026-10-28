@@ -1,6 +1,6 @@
 import { query } from "@/lib/db";
 import { allProfiles } from "@/lib/access";
-import type { SearchParams } from "@/lib/jobs";
+import { interviewEndedSql, type SearchParams } from "@/lib/jobs";
 import { Pagination } from "@/components/list-controls";
 import { JobsManager } from "./jobs-manager";
 
@@ -56,13 +56,15 @@ export default async function AdminJobsPage({ searchParams }: { searchParams: Pr
     apply_status: string;
     apply_fail_reason: string;
     interview_status: string;
+    needs_result: boolean;
     created_at: string;
     applied_by: string | null;
     has_resume: boolean;
   }>(
     `SELECT j.id, j.company_name, j.job_title, j.job_link, COALESCE(p.full_name, p.username) AS profile_name, j.gen_status, j.gen_message,
        j.apply_status, j.apply_fail_reason, j.interview_status, j.created_at::text, COALESCE(NULLIF(u.display_name, ''), u.username) AS applied_by,
-       (j.resume_name <> '') AS has_resume
+       (j.resume_name <> '') AS has_resume,
+       (j.interview_status = 'scheduled' AND ${interviewEndedSql()}) AS needs_result
      FROM jobs j JOIN users p ON p.id = j.user_id LEFT JOIN users u ON u.id = j.applied_by
      ${whereSql} ORDER BY j.created_at DESC, j.id DESC LIMIT ${size} OFFSET ${(page - 1) * size}`,
     params,

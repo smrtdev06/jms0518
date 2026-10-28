@@ -6,6 +6,8 @@ const STYLES: Record<string, { label: string; className: string }> = {
   failed: { label: "Failed", className: "border-rose-400/40 bg-rose-500/15 text-rose-200" },
   unscheduled: { label: "Unscheduled", className: "border-zinc-400/25 bg-zinc-400/10 text-zinc-300" },
   scheduled: { label: "Scheduled", className: "border-violet-400/35 bg-violet-400/15 text-violet-200" },
+  // Shown (not stored): a Scheduled interview whose time has passed and has no result yet.
+  needs_result: { label: "Needs Result", className: "border-amber-400/45 bg-amber-400/15 text-amber-200" },
   interviewed: { label: "Interviewed", className: "border-sky-400/35 bg-sky-400/15 text-sky-200" },
   offered: { label: "Offered", className: "border-emerald-400/35 bg-emerald-400/15 text-emerald-200" },
   rejected: { label: "Rejected", className: "border-rose-400/35 bg-rose-400/15 text-rose-200" },
