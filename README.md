@@ -105,6 +105,10 @@ The body can also be JSON: `{ "text": "..." }` or `{ "links": ["https://...", ..
 `X-API-Key` instead). Answer (counts only): `{ ok, received, saved, skipped }` —
 201 when something new was saved, 200 when everything was a duplicate, 401 for a wrong key.
 
+On the Resume Tailor, **Get from DB** puts these links into the Job URLs box (one per line, added to what is there),
+leaving out links already registered — on the member's profile, or for anyone when the duplicate scope is "all
+profiles" — so generating does not spend tokens on them. It is disabled while a batch is generating.
+
 Administrator → **Bot links** lists the `job_links` table: search, add links by pasting a text, delete selected links or
 all of them; the *Tailored* column shows how many profiles already have a job with that exact link.
 
