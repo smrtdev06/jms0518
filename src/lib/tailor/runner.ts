@@ -335,6 +335,9 @@ async function writePackage(
     company: finalCompany,
     jobTitle: finalTitle,
     jobUrl: url,
+    jobDescription: target.jobDescription,
+    jobStack: target.jobStack,
+    companyUrl: target.companyUrl,
   };
   const names = packageNames(snapshot);
   await log("Saved the resume and cover letter. The PDFs are built when they are downloaded.");

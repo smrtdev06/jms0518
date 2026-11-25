@@ -51,7 +51,11 @@ if (prod) {
   run(process.execPath, [next, "build"]);
 }
 log(`Starting app (${prod ? "production" : "development"}) — http://localhost:${process.env.PORT || 3000}`);
-const app = spawn(process.execPath, [next, prod ? "start" : "dev"], { stdio: "inherit" });
+// Turbopack's watcher on Windows follows missing paths under node_modules (next/node_modules/@swc,
+// @opentelemetry) and then either hangs on "waiting for the filesystem to settle" or crashes.
+const app = spawn(process.execPath, [next, prod ? "start" : "dev", ...(prod ? [] : ["--webpack"])], {
+  stdio: "inherit",
+});
 
 const shutdown = () => {
   app.kill("SIGINT");

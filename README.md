@@ -76,7 +76,7 @@ One database: `users` (accounts + tailor profiles), `jobs` (tailoring, applying 
 `interview_rounds` (earlier interview rounds of a job), `job_links` (links sent by the job-finding bot),
 `stored_files` (applied screenshots, uploaded templates), `settings`, `audit_logs`.
 
-Generation saves only the AI's resume and cover letter content (`jobs.tailored`).
+Generation saves the AI's resume and cover letter content in `jobs.tailored`, along with the job description, stack, and company URL used to write them.
 The resume PDF, cover letter PDF, package ZIP and **Download all** ZIP are built when they are downloaded, with the
 templates current at that moment, so a new template also applies to jobs generated earlier.
 
@@ -87,6 +87,8 @@ templates current at that moment, so a new template also applies to jobs generat
 - `prompts/DEFAULT_PROMPT_SYSTEM.md`, `prompts/DEFAULT_PROMPT_USER.md` — the tailoring prompts, read for every link
   (placeholders such as `{{baseResumeText}}`, `{{jobDescription}}`, `{{companyName}}`). On hosts without the files,
   set `PROMPT_SYSTEM_TEXT` / `PROMPT_USER_TEXT` instead.
+- `prompts/DEFAULT_ANSWERS_PROMPT_SYSTEM.md`, `prompts/DEFAULT_ANSWERS_PROMPT_USER.md` — the screening-question prompts
+  for the extension. Override them with `ANSWERS_PROMPT_SYSTEM` / `ANSWERS_PROMPT_USER`, or with the `_TEXT` variants.
 - `fonts/` — free fonts with the same letter widths as Calibri, Cambria, Arial, Times New Roman, Courier New and Georgia,
   used where those fonts are not installed (SIL Open Font License).
 
@@ -111,6 +113,13 @@ profiles" — so generating does not spend tokens on them. It is disabled while 
 
 Administrator → **Bot links** lists the `job_links` table: search, add links by pasting a text, delete selected links or
 all of them; the *Tailored* column shows how many profiles already have a job with that exact link.
+
+## Extension API (auto-apply)
+
+A member signs in with `POST /api/extension/session` (`username` or `userId`, plus `password`) and then sends
+`Authorization: Bearer <token>`. Other roles get no token. `GET /api/extension/sync` returns the profile, counts, and
+jobs. For one job: `GET .../resume`, `GET .../cover-letter`, `POST .../applied-image`, `POST .../failed` with
+`{ "reason" }`, and `POST .../answers` with `{ "questions" }`.
 
 ## Backup and restore
 

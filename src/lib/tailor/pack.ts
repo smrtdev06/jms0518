@@ -13,6 +13,10 @@ export type PackageSnapshot = {
   company: string;
   jobTitle: string;
   jobUrl: string;
+  // Kept so screening answers can be written later without fetching the posting again.
+  jobDescription?: string;
+  jobStack?: string;
+  companyUrl?: string;
 };
 
 export type FileKind = "resume" | "cover" | "zip";

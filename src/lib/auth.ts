@@ -38,6 +38,34 @@ export async function createSession(userId: number) {
   });
 }
 
+/** Bearer token for the auto-apply extension. Website session cookies do not carry `ext`, so they cannot call these routes. */
+export async function createExtensionToken(userId: number) {
+  return new SignJWT({ uid: userId, ext: true })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime(`${SESSION_DAYS}d`)
+    .sign(secret());
+}
+
+export async function userFromExtensionToken(token: string): Promise<SessionUser | null> {
+  let uid: unknown;
+  let ext: unknown;
+  try {
+    const payload = (await jwtVerify(token, secret())).payload;
+    uid = payload.uid;
+    ext = payload.ext;
+  } catch {
+    return null;
+  }
+  if (ext !== true) return null;
+  const row = await queryOne<{ id: number; username: string; display_name: string; role: Role }>(
+    "SELECT id, username, display_name, role FROM users WHERE id = $1 AND is_active",
+    [uid],
+  );
+  if (!row) return null;
+  return { id: row.id, username: row.username, displayName: row.display_name || row.username, role: row.role };
+}
+
 export async function destroySession() {
   const store = await cookies();
   store.delete(SESSION_COOKIE);
