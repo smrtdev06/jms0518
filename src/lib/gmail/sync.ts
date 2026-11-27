@@ -19,6 +19,8 @@ export type AccountReport = {
   memberId: number;
   email: string;
   status: "done" | "partial" | "skipped" | "error";
+  /** new emails found in the inbox: received since the previous check (and not analyzed yet) */
+  found: number;
   /** emails analyzed in this run */
   checked: number;
   requests: number;
@@ -96,7 +98,7 @@ export async function syncGmail(options: {
 }
 
 function emptyReport(memberId: number, email: string, status: AccountReport["status"], error?: string): AccountReport {
-  return { memberId, email, status, checked: 0, requests: 0, matched: 0, unmatched: 0, left: 0, failed: 0, tokens: 0, error, at: new Date().toISOString() };
+  return { memberId, email, status, found: 0, checked: 0, requests: 0, matched: 0, unmatched: 0, left: 0, failed: 0, tokens: 0, error, at: new Date().toISOString() };
 }
 
 async function syncAccount(memberId: number, deadline: number): Promise<AccountReport> {
@@ -133,6 +135,7 @@ async function syncAccount(memberId: number, deadline: number): Promise<AccountR
       ),
     );
     const todo = ids.filter((id) => !seen.has(id));
+    report.found = todo.length;
     const jobs = await query<CandidateJob>(
       "SELECT id, company_name, job_title, job_link, apply_status, applied_at FROM jobs WHERE user_id = $1 AND gen_status = 'done'",
       [memberId],

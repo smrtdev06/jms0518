@@ -8,7 +8,7 @@ import { FormError, Pill, Table, Td, Th } from "@/components/admin-ui";
 import { formatDateTime } from "@/lib/format";
 import { gmailConnection, gmailLink, sameMailbox } from "@/lib/gmail/mailbox";
 
-type Report = { status?: string; checked?: number; requests?: number; matched?: number; unmatched?: number; left?: number; failed?: number; error?: string };
+type Report = { status?: string; found?: number; checked?: number; requests?: number; matched?: number; unmatched?: number; left?: number; failed?: number; error?: string };
 
 export type GmailMember = {
   id: number;
@@ -23,8 +23,10 @@ export type GmailMember = {
   last_error: string | null;
   last_result: Report | null;
   sync_started_at: string | null;
+  /** interview request emails found in this profile's Gmail */
   requests: number;
-  analyzed: number;
+  /** receive times of the emails checked from the last two days */
+  recent_received: string[];
 };
 
 export type RequestEmail = {
@@ -43,6 +45,17 @@ export type RequestEmail = {
 };
 
 type Config = { google: boolean; ai: boolean; cronSecret: boolean; vercel: boolean; redirectUri: string };
+
+function plural(n: number, word: string) {
+  return `${n.toLocaleString()} ${word}${n === 1 ? "" : "s"}`;
+}
+
+/** How many of these receive times are today, in the viewer's own time zone. */
+function receivedToday(times: string[]) {
+  const midnight = new Date();
+  midnight.setHours(0, 0, 0, 0);
+  return times.filter((t) => new Date(t) >= midnight).length;
+}
 
 function state(m: GmailMember) {
   return gmailConnection(m.profile_email, m.connected_email, m.last_error);
@@ -167,9 +180,9 @@ export function GmailManager({ members, emails, config, notice }: { members: Gma
                       <div>{m.last_sync_at ? formatDateTime(m.last_sync_at) : "Not yet"}</div>
                       {r.status && (
                         <div className="text-[11px] text-faint">
-                          {r.checked ?? 0} analyzed · {r.requests ?? 0} requests
-                          {r.left ? ` · ${r.left} left for the next check` : ""}
-                          {r.failed ? ` · ${r.failed} failed` : ""}
+                          {/* Checks from before "found" was recorded: what they analyzed plus what they left. */}
+                          {plural(r.found ?? (r.checked ?? 0) + (r.left ?? 0), "new email")} since the previous check
+                          {r.left ? ` · ${r.left} not read yet` : ""}
                         </div>
                       )}
                     </>
@@ -178,8 +191,10 @@ export function GmailManager({ members, emails, config, notice }: { members: Gma
                   )}
                 </Td>
                 <Td className="text-xs">
-                  {m.requests} {m.requests === 1 ? "job" : "jobs"}
-                  <div className="text-[11px] text-faint">{m.analyzed.toLocaleString()} emails analyzed</div>
+                  {plural(m.requests, "interview request")}
+                  <div className="text-[11px] text-faint" suppressHydrationWarning>
+                    {plural(receivedToday(m.recent_received), "email")} today
+                  </div>
                 </Td>
                 <Td>
                   <div className="flex justify-end gap-2">

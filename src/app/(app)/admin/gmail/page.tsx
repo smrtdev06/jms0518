@@ -16,8 +16,10 @@ export default async function GmailPage({ searchParams }: { searchParams: Promis
   const members = await query<GmailMember>(
     `SELECT u.id, u.username, u.display_name, u.full_name, u.email AS profile_email, u.is_active,
        g.email AS connected_email, g.connected_at, g.last_sync_at, g.last_error, g.last_result, g.sync_started_at,
-       (SELECT count(*)::int FROM jobs j WHERE j.user_id = u.id AND j.interview_requested) AS requests,
-       (SELECT count(*)::int FROM gmail_messages m WHERE m.member_id = u.id) AS analyzed
+       (SELECT count(*)::int FROM gmail_messages m WHERE m.member_id = u.id AND m.interview_request) AS requests,
+       -- When the emails of the last two days were received: the page counts "today" in the viewer's time zone.
+       (SELECT COALESCE(json_agg(m.received_at), '[]'::json) FROM gmail_messages m
+         WHERE m.member_id = u.id AND m.received_at > now() - interval '50 hours') AS recent_received
      FROM users u LEFT JOIN gmail_accounts g ON g.member_id = u.id
      WHERE u.role = 'member' ORDER BY u.is_active DESC, lower(u.username)`,
   );
