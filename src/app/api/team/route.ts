@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { audit, queryOne } from "@/lib/db";
-import { can, requireApiUser, HttpError } from "@/lib/auth";
+import { can, requireApiUser } from "@/lib/auth";
+import { HttpError } from "@/lib/errors";
 import { readJson, route } from "@/lib/http";
 import { validateUserBody } from "@/lib/validators";
 import { autoAssign } from "@/lib/assign";

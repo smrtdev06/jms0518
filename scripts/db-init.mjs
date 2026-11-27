@@ -1,4 +1,4 @@
-// Creates the database and schema (when missing) and the administrator.
+// Creates the database and schema (when missing), applies new migrations (db/migrations), and the administrator.
 // Usage: npm run db:init   (reads the DB_* / DATABASE_URL, ADMIN_USERNAME and ADMIN_PASSWORD values from .env)
 // On Vercel it runs before every build (npm run vercel-build), so the hosted database is always up to date.
 import "dotenv/config";
@@ -7,6 +7,7 @@ import path from "node:path";
 import pg from "pg";
 import bcrypt from "bcryptjs";
 import { databaseUrl } from "./db-url.mjs";
+import { applyMigrations } from "./migrations.mjs";
 
 // Neon (on Vercel) also provides a direct, non-pooled URL, which suits the schema statements best.
 const url = process.env.DATABASE_URL_UNPOOLED || databaseUrl();
@@ -20,6 +21,8 @@ try {
   const schema = fs.readFileSync(path.join(process.cwd(), "db", "schema.sql"), "utf8");
   await client.query(schema);
   console.log("Schema applied.");
+  const migrated = await applyMigrations(client);
+  if (migrated.length) console.log(`Migrations applied: ${migrated.join(", ")}.`);
 
   const username = process.env.ADMIN_USERNAME || "admin";
   const password = process.env.ADMIN_PASSWORD;

@@ -1,15 +1,7 @@
 import { NextResponse } from "next/server";
 import { buildFile, loadSnapshot, type FileKind } from "./pack";
 
-export function json(body: unknown, status = 200) {
-  return NextResponse.json(body, { status });
-}
-
-// A server error for the response, with the details only in the server log.
-export function serverError(error: unknown, message: string) {
-  console.error(message, error);
-  return json({ ok: false, error: message }, 500);
-}
+// File downloads and uploads for the API routes (JSON answers and errors: lib/http.ts).
 
 export function attachment(body: Buffer | string, filename: string, type: string) {
   const ascii = filename.replace(/[^\x20-\x7E]/g, "_").replace(/"/g, "");

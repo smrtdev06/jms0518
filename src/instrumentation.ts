@@ -10,5 +10,8 @@ export async function register() {
       // The database may be down; the app still starts and reports database errors per request.
       console.error("[jms] Could not check the administrator:", error instanceof Error ? error.message : error);
     }
+    // The daily Gmail check, when the server runs for a long time (Vercel uses Vercel Cron instead).
+    const { startGmailScheduler } = await import("./lib/gmail/scheduler");
+    startGmailScheduler();
   }
 }

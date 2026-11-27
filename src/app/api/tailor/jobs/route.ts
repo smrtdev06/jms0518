@@ -1,8 +1,8 @@
-import { after } from "next/server";
+import { after, NextResponse } from "next/server";
 import { can, requireApiUser } from "@/lib/auth";
+import { HttpError } from "@/lib/errors";
 import { route } from "@/lib/http";
 import { serverless } from "@/lib/tailor/hosting";
-import { json, serverError } from "@/lib/tailor/http";
 import { deleteFailedJobs, failTimedOutJobs, listJobs, recoverInterruptedJobs } from "@/lib/tailor/jobs";
 import { withUserLock } from "@/lib/tailor/user-lock";
 import { loadProfile } from "@/lib/tailor/profile";
@@ -22,7 +22,7 @@ export const GET = route(async () => {
     const profile = await loadProfile(user.id);
     if (profile) after(() => pumpQueue(user.id, profile).catch((error) => console.error("Could not continue the batch", error)));
   }
-  return json({ ok: true, jobs });
+  return NextResponse.json({ ok: true, jobs });
 });
 
 // Clear: stops the running batch and empties the board. Finished packages stay in Applying Management.
@@ -31,12 +31,12 @@ export const DELETE = route(async (request) => {
   const user = await requireApiUser(can.tailor);
   if (new URL(request.url).searchParams.get("failed") === "1") {
     const removed = await withUserLock(user.id, () => deleteFailedJobs(user.id));
-    return json({ ok: true, removed: removed.length, jobs: await listJobs(user.id) });
+    return NextResponse.json({ ok: true, removed: removed.length, jobs: await listJobs(user.id) });
   }
   try {
     await clearGeneration(user.id);
   } catch (error) {
-    return serverError(error, "Could not clear the board. Try again.");
+    throw new HttpError(500, "Could not clear the board. Try again.", { cause: error });
   }
-  return json({ ok: true, jobs: [] });
+  return NextResponse.json({ ok: true, jobs: [] });
 });

@@ -38,6 +38,12 @@ export type JobRow = {
   rejected_by_name: string | null;
   assigned_bidder_name: string | null;
   assigned_caller_name: string | null;
+  /** the newest interview request email found in the profile's Gmail (see src/lib/gmail) */
+  interview_requested: boolean;
+  interview_request_at: string | null;
+  interview_request_url: string;
+  interview_request_subject: string;
+  interview_request_from: string;
   /** earlier rounds (oldest first); the current round's result is interview_result_* */
   interview_rounds: InterviewRound[];
 };
@@ -66,6 +72,12 @@ export function interviewEndedSql(alias = "j") {
       ELSE (${c("interview_date")} + time '23:59') AT TIME ZONE ${c("interview_timezone")}
     END)`;
 }
+
+/**
+ * SQL: the job shows "Request Schedule": the company emailed to schedule an interview (found in the profile's Gmail)
+ * and the interview is not scheduled yet.
+ */
+export const REQUESTED_SQL = "(j.interview_requested AND j.interview_status = 'unscheduled')";
 
 export type AssigneeFilter = { column: "assigned_bidder_id" | "assigned_caller_id"; userId: number | null };
 
@@ -110,6 +122,7 @@ const SELECT = `
   j.rejected_at, (SELECT COALESCE(NULLIF(x.display_name, ''), x.username) FROM users x WHERE x.id = j.rejected_by) AS rejected_by_name,
   (SELECT COALESCE(NULLIF(x.display_name, ''), x.username) FROM users x WHERE x.id = j.assigned_bidder_id) AS assigned_bidder_name,
   (SELECT COALESCE(NULLIF(x.display_name, ''), x.username) FROM users x WHERE x.id = j.assigned_caller_id) AS assigned_caller_name,
+  j.interview_requested, j.interview_request_at, j.interview_request_url, j.interview_request_subject, j.interview_request_from,
   (SELECT COALESCE(json_agg(json_build_object(
       'round', r.round, 'date', to_char(r.interview_date, 'YYYY-MM-DD'), 'start', to_char(r.interview_start, 'HH24:MI'),
       'end', to_char(r.interview_end, 'HH24:MI'), 'timezone', r.interview_timezone, 'outcome', r.outcome, 'note', r.note,
@@ -135,6 +148,8 @@ export async function listJobs(opts: {
   interviewEnded?: boolean;
   /** only the jobs assigned to one bidder / caller (userId null: the unassigned ones) */
   assignee?: AssigneeFilter;
+  /** only unscheduled jobs with an interview request email ("Request Schedule") */
+  requested?: boolean;
   orderBy: string;
 }) {
   if (!opts.profileId) return { rows: [] as JobRow[], total: 0 };
@@ -151,6 +166,7 @@ export async function listJobs(opts: {
   }
   if (opts.interviewEnded !== undefined) where.push(opts.interviewEnded ? interviewEndedSql() : `NOT ${interviewEndedSql()}`);
   if (opts.assignee) where.push(assigneeSql(opts.assignee, params));
+  if (opts.requested) where.push(REQUESTED_SQL);
   if (opts.q) {
     params.push(`%${opts.q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`);
     where.push(`(j.company_name ILIKE $${params.length} OR j.job_title ILIKE $${params.length} OR j.job_link ILIKE $${params.length})`);
@@ -169,10 +185,10 @@ export async function listJobs(opts: {
 function serialize(row: JobRow): JobRow {
   const iso = (v: unknown) => (v instanceof Date ? v.toISOString() : (v as string | null));
   return { ...row, created_at: iso(row.created_at)!, applied_at: iso(row.applied_at), apply_failed_at: iso(row.apply_failed_at), interview_start_at: iso(row.interview_start_at), interview_result_at: iso(row.interview_result_at),
-    scheduled_at: iso(row.scheduled_at), offered_at: iso(row.offered_at), rejected_at: iso(row.rejected_at) };
+    scheduled_at: iso(row.scheduled_at), offered_at: iso(row.offered_at), rejected_at: iso(row.rejected_at), interview_request_at: iso(row.interview_request_at) };
 }
 
-type JobCounts = Record<"ready" | "applied" | "failed" | "unscheduled" | "scheduled" | "needs_result" | "interviewed" | "offered" | "rejected", number>;
+type JobCounts = Record<"ready" | "applied" | "failed" | "unscheduled" | "requested" | "scheduled" | "needs_result" | "interviewed" | "offered" | "rejected", number>;
 
 // How many of the profile's jobs (only the ones assigned to a bidder / caller, for them) are at each step.
 export async function countJobs(profileId: number | null, assignee?: AssigneeFilter) {
@@ -184,6 +200,7 @@ export async function countJobs(profileId: number | null, assignee?: AssigneeFil
        count(*) FILTER (WHERE apply_status = 'applied')::int AS applied,
        count(*) FILTER (WHERE apply_status = 'failed')::int AS failed,
        count(*) FILTER (WHERE apply_status = 'applied' AND interview_status = 'unscheduled')::int AS unscheduled,
+       count(*) FILTER (WHERE apply_status = 'applied' AND ${REQUESTED_SQL})::int AS requested,
        count(*) FILTER (WHERE apply_status = 'applied' AND interview_status = 'scheduled' AND NOT ${interviewEndedSql()})::int AS scheduled,
        count(*) FILTER (WHERE apply_status = 'applied' AND interview_status = 'scheduled' AND ${interviewEndedSql()})::int AS needs_result,
        count(*) FILTER (WHERE apply_status = 'applied' AND interview_status = 'interviewed')::int AS interviewed,

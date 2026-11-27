@@ -1,5 +1,5 @@
 import { extensionJson, extensionRoute, assertMemberJob, markAppliedWithImage, readAppliedImage, readStoredAppliedImage, requireExtensionMember } from "@/lib/extension";
-import { HttpError } from "@/lib/auth";
+import { HttpError } from "@/lib/errors";
 import { parseId } from "@/lib/http";
 
 type Ctx = { params: Promise<{ id: string }> };

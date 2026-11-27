@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
-import { CalendarClock, ChevronDown, History, LoaderCircle, Lock, MessageSquareText, Pencil, Save, Trash2, X } from "lucide-react";
+import { CalendarClock, ChevronDown, ExternalLink, History, LoaderCircle, Lock, Mail, MessageSquareText, Pencil, Save, Trash2, X } from "lucide-react";
 import type { InterviewRound, JobRow } from "@/lib/jobs";
 import { TIMEZONES, formatInterviewRange, timezoneLabel } from "@/lib/timezones";
 import { StatusBadge } from "@/components/status-badge";
@@ -33,6 +33,7 @@ export function InterviewList({ jobs, canEdit }: { jobs: JobRow[]; canEdit: bool
               <WhenLabel job={job} />
               <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
                 <div className="flex items-center gap-2">
+                  <RequestBadge job={job} />
                   <ChevronDown className={clsx("size-4 text-faint transition", open && "rotate-180")} />
                   {job.interview_result_outcome && <ResultChip outcome={job.interview_result_outcome} />}
                   <InterviewStatus job={job} />
@@ -44,6 +45,62 @@ export function InterviewList({ jobs, canEdit }: { jobs: JobRow[]; canEdit: bool
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/** The company emailed to schedule an interview (found in the profile's Gmail) and it is not scheduled yet. */
+function isRequested(job: JobRow) {
+  return job.interview_requested && job.interview_status === "unscheduled";
+}
+
+function RequestBadge({ job }: { job: JobRow }) {
+  if (!isRequested(job)) return null;
+  const received = job.interview_request_at ? new Date(job.interview_request_at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "";
+  const title = [job.interview_request_subject, job.interview_request_from && `From ${job.interview_request_from}`, received && `Received ${received}`, job.interview_request_url && "Click to open the email"]
+    .filter(Boolean)
+    .join("\n");
+  const className =
+    "inline-flex h-6 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-amber-400/50 bg-amber-400/15 px-2.5 text-[11px] font-medium text-amber-200";
+  const content = (
+    <>
+      <span className="relative flex size-1.5">
+        <span className="absolute inline-flex size-full animate-ping rounded-full bg-amber-400 opacity-75" />
+        <span className="relative inline-flex size-1.5 rounded-full bg-amber-400" />
+      </span>
+      Request Schedule
+    </>
+  );
+  return job.interview_request_url ? (
+    <a href={job.interview_request_url} target="_blank" rel="noopener noreferrer" className={clsx(className, "hover:bg-amber-400/25")} title={title} suppressHydrationWarning>
+      {content}
+    </a>
+  ) : (
+    <span className={className} title={title} suppressHydrationWarning>
+      {content}
+    </span>
+  );
+}
+
+/** The interview request email, in the opened row. */
+function RequestEmail({ job }: { job: JobRow }) {
+  if (!job.interview_requested) return null;
+  return (
+    <div className={clsx("mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-3 py-2 text-xs", isRequested(job) ? "border-amber-400/30 bg-amber-400/5" : "border-line bg-surface-2/40")}>
+      <Mail className={clsx("size-3.5 shrink-0", isRequested(job) ? "text-amber-300" : "text-faint")} />
+      <span className="font-medium">{isRequested(job) ? "Interview request email" : "Last interview email"}</span>
+      {job.interview_request_subject && <span className="min-w-0 truncate text-fg/90">{job.interview_request_subject}</span>}
+      {job.interview_request_from && <span className="text-muted">from {job.interview_request_from}</span>}
+      {job.interview_request_at && (
+        <span className="text-muted" suppressHydrationWarning>
+          {new Date(job.interview_request_at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
+        </span>
+      )}
+      {job.interview_request_url && (
+        <a href={job.interview_request_url} target="_blank" rel="noopener noreferrer" className="ml-auto inline-flex items-center gap-1 text-accent hover:underline">
+          Open in Gmail <ExternalLink className="size-3" />
+        </a>
+      )}
     </div>
   );
 }
@@ -83,7 +140,8 @@ function Details({ job, canEdit }: { job: JobRow; canEdit: boolean }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const initial = {
-    email: job.interview_email,
+    // Scheduling an interview that was requested by email: the email's link is the thread to keep.
+    email: job.interview_email || (isRequested(job) ? job.interview_request_url : ""),
     note: job.interview_note,
     date: job.interview_date ?? "",
     start_time: job.interview_start ?? "",
@@ -131,6 +189,7 @@ function Details({ job, canEdit }: { job: JobRow; canEdit: boolean }) {
 
   return (
     <div className="border-t border-line/60 px-4 py-3" data-no-toggle>
+      <RequestEmail job={job} />
       <div className="flex flex-col gap-4 lg:flex-row">
         <div className="grid flex-1 grid-cols-1 gap-x-6 gap-y-3 text-xs sm:grid-cols-2 lg:grid-cols-6">
           <Field label="Email" className="sm:col-span-2 lg:col-span-3">

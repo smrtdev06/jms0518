@@ -1,6 +1,6 @@
+import { NextResponse } from "next/server";
 import { can, requireApiUser } from "@/lib/auth";
 import { route } from "@/lib/http";
-import { json } from "@/lib/tailor/http";
 import { abandonGeneration } from "@/lib/tailor/runner";
 
 // The member left the Resume Tailor before the batch finished (tab closed, reload, back button, "Leave anyway").
@@ -8,5 +8,5 @@ import { abandonGeneration } from "@/lib/tailor/runner";
 export const POST = route(async () => {
   const user = await requireApiUser(can.tailor);
   const removed = await abandonGeneration(user.id);
-  return json({ ok: true, removed });
+  return NextResponse.json({ ok: true, removed });
 });

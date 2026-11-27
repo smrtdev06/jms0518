@@ -2,7 +2,8 @@ import { scoreAts } from "./ats";
 import { readProvider, scrub } from "./api-key";
 import { claimForManual, claimNextJob, clearJobs, deleteUnfinishedJobs, failTimedOutJobs, getJob, insertJobs, jobStillRunning, listJobs, recoverInterruptedJobs, updateJob } from "./jobs";
 import { claimCompany, duplicateLink } from "./duplicates";
-import { fetchJob, isGenericTitle } from "./fetch-job";
+import { fetchJob } from "./fetch-job";
+import { isGenericTitle } from "./job-page";
 import { condenseJobText } from "./job-text";
 import { addUsage, generateApplication, GenerationError, type Usage } from "./openai";
 import { packageNames, type PackageSnapshot } from "./pack";
@@ -16,7 +17,6 @@ import type { Experience, GeneratedContent, JobLog, Profile } from "./types";
 import { withUserLock } from "./user-lock";
 
 type Run = { controller: AbortController; done: Promise<void> };
-type GenerationProfile = Profile;
 // True once the job should stop: Clear, a new batch, or (serverless) the job was cleared or timed out elsewhere.
 type Stale = () => Promise<boolean>;
 type Log = (message: string, level?: JobLog["level"]) => Promise<void>;
@@ -99,7 +99,7 @@ export function clearGeneration(userPk: number) {
   return withUserLock(userPk, () => stopAndClear(userPk));
 }
 
-export function startGeneration(userPk: number, profile: GenerationProfile, urls: string[]) {
+export function startGeneration(userPk: number, profile: Profile, urls: string[]) {
   return withUserLock(userPk, async () => {
     if (!serverless) await recoverInterruptedJobs();
     await stopAndClear(userPk);
@@ -122,7 +122,12 @@ export function startGeneration(userPk: number, profile: GenerationProfile, urls
   });
 }
 
-export async function continueWithManual(userPk: number, profile: GenerationProfile, jobId: number, description: string) {
+export async function continueWithManual(
+  userPk: number,
+  profile: Profile,
+  jobId: number,
+  description: string,
+): Promise<{ ok: true; done: Promise<void> } | { error: string; status: number }> {
   const job = await getJob(userPk, jobId);
   if (!job) return { error: "That package was not found.", status: 404 };
   if (job.status !== "needs_manual" && job.status !== "failed") {
@@ -144,7 +149,7 @@ export async function continueWithManual(userPk: number, profile: GenerationProf
   return { ok: true as const, done };
 }
 
-async function runBatch(userPk: number, profile: GenerationProfile, jobs: { id: number; url: string }[], signal: AbortSignal, epoch: number) {
+async function runBatch(userPk: number, profile: Profile, jobs: { id: number; url: string }[], signal: AbortSignal, epoch: number) {
   const queue = [...jobs];
   const workers = Array.from({ length: Math.min(LINKS_AT_ONCE, queue.length) }, async () => {
     while (queue.length && !signal.aborted && epochs().get(userPk) === epoch) {
@@ -163,7 +168,7 @@ async function runBatch(userPk: number, profile: GenerationProfile, jobs: { id: 
 // finish them. A job whose request was stopped anyway times out (failTimedOutJobs).
 const CLAIM_WINDOW_MS = 100000;
 
-export async function pumpQueue(userPk: number, profile: GenerationProfile) {
+export async function pumpQueue(userPk: number, profile: Profile) {
   await failTimedOutJobs(userPk);
   const started = Date.now();
   const signal = new AbortController().signal;
@@ -177,7 +182,7 @@ export async function pumpQueue(userPk: number, profile: GenerationProfile) {
   await Promise.allSettled(Array.from({ length: LINKS_AT_ONCE }, worker));
 }
 
-async function processFetched(userPk: number, profile: GenerationProfile, jobId: number, url: string, signal: AbortSignal, stale: Stale) {
+async function processFetched(userPk: number, profile: Profile, jobId: number, url: string, signal: AbortSignal, stale: Stale) {
   const logs: JobLog[] = [];
   const log = queueLog(userPk, jobId, logs);
   try {
@@ -214,7 +219,7 @@ async function processFetched(userPk: number, profile: GenerationProfile, jobId:
   }
 }
 
-async function processManual(userPk: number, profile: GenerationProfile, jobId: number, url: string, description: string, signal: AbortSignal, stale: Stale) {
+async function processManual(userPk: number, profile: Profile, jobId: number, url: string, description: string, signal: AbortSignal, stale: Stale) {
   const existing = await getJob(userPk, jobId);
   const logs: JobLog[] = [...(existing?.logs || [])];
   const log = queueLog(userPk, jobId, logs);
@@ -244,7 +249,7 @@ async function markFailed(userPk: number, jobId: number, error: unknown, log: Lo
 
 async function writePackage(
   userPk: number,
-  profile: GenerationProfile,
+  profile: Profile,
   jobId: number,
   url: string,
   jobText: string,

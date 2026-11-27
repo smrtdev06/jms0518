@@ -1,4 +1,5 @@
-import { can, requireApiUser, HttpError } from "@/lib/auth";
+import { can, requireApiUser } from "@/lib/auth";
+import { HttpError } from "@/lib/errors";
 import { assertJobAccess } from "@/lib/access";
 import { markAppliedWithImage, readStoredAppliedImage } from "@/lib/extension";
 import { parseId, route } from "@/lib/http";

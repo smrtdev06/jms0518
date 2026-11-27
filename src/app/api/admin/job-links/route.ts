@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { audit, query } from "@/lib/db";
-import { can, requireApiUser, HttpError } from "@/lib/auth";
+import { can, requireApiUser } from "@/lib/auth";
+import { HttpError } from "@/lib/errors";
 import { readJson, route, str } from "@/lib/http";
 import { extractLinks, saveLinks } from "@/lib/job-links";
 

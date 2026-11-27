@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { audit, transaction } from "@/lib/db";
-import { can, requireApiUser, HttpError } from "@/lib/auth";
+import { can, requireApiUser } from "@/lib/auth";
+import { HttpError } from "@/lib/errors";
 import { assertJobAccess } from "@/lib/access";
 import { autoAssign } from "@/lib/assign";
 import { parseId, readJson, route, str } from "@/lib/http";

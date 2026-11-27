@@ -1,7 +1,8 @@
-import { requireApiUser, HttpError } from "@/lib/auth";
+import { requireApiUser } from "@/lib/auth";
+import { HttpError } from "@/lib/errors";
 import { assertJobAccess } from "@/lib/access";
 import { parseId, route } from "@/lib/http";
-import { sendPackageFile } from "@/lib/tailor/http";
+import { sendPackageFile } from "@/lib/tailor/file-transfer";
 
 type Ctx = { params: Promise<{ id: string }> };
 

@@ -1,5 +1,5 @@
 import { audit, queryOne } from "@/lib/db";
-import { HttpError } from "@/lib/auth";
+import { HttpError } from "@/lib/errors";
 import { assertMemberJob, extensionJson, extensionRoute, requireExtensionMember } from "@/lib/extension";
 import { parseId, readJson, str } from "@/lib/http";
 

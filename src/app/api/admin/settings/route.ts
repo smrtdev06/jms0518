@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { audit, transaction } from "@/lib/db";
-import { can, requireApiUser, HttpError } from "@/lib/auth";
+import { can, requireApiUser } from "@/lib/auth";
+import { HttpError } from "@/lib/errors";
 import { readJson, route } from "@/lib/http";
 
 export const PUT = route(async (request) => {

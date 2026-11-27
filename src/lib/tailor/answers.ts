@@ -1,7 +1,9 @@
-import { HttpError } from "@/lib/auth";
+import { HttpError } from "@/lib/errors";
 import { query } from "@/lib/db";
+import { careerYears, shapeAnswers } from "./answer-fields";
 import { loadAnswerPrompts } from "./answers-prompt";
 import { readProvider, scrub } from "./api-key";
+import { byRecency } from "./base-resume";
 import { condenseJobText } from "./job-text";
 import { generateAnswers, GenerationError } from "./openai";
 import { loadSnapshot, type PackageSnapshot } from "./pack";
@@ -38,7 +40,16 @@ export async function answerScreeningQuestions(userId: number, jobId: number, qu
   try {
     const generated = await generateAnswers({ apiKey: provider.apiKey, system: prompts.system, user: prompts.user, signal });
     const evidence = experienceEvidence(snapshot, profile.baseResumeText);
-    return { ok: true as const, answers: shapeAnswers(generated.text, questionsText, profile, evidence) };
+    const facts = {
+      fullName: profile.fullName,
+      phone: profile.phone,
+      email: profile.email,
+      address: profile.address,
+      linkedin: profile.linkedin,
+      company: byRecency(profile.experiences).find((item) => item.companyName?.trim())?.companyName || "",
+      years: careerYears(profile.experiences),
+    };
+    return { ok: true as const, answers: shapeAnswers(generated.text, questionsText, facts, evidence) };
   } catch (error) {
     if (error instanceof GenerationError) throw new HttpError(502, scrub(error.message));
     throw error;
@@ -117,82 +128,6 @@ function resumeMarkdown(snapshot: PackageSnapshot) {
   return [`# ${profile.fullName}`, contact, "## Summary", summary, "## Skills", skills, "## Experience", roles, "## Education", education]
     .filter((part) => part.trim())
     .join("\n\n");
-}
-
-// The model writes the prose. Choice, file, and profile fields are then forced into a value the form can submit.
-function shapeAnswers(modelText: string, questionsText: string, profile: AnswerProfile, evidence: string) {
-  const questions = questionsText.split(/\n\s*\n/).map((item) => item.replace(/^\d+\.\s+/, "").trim()).filter(Boolean);
-  const written = modelAnswers(modelText);
-  return questions
-    .map((question, index) => {
-      const answer = fieldAnswer(question, written[index] || "", profile, evidence);
-      return `# Q${index + 1}\n${question}\n\n# A${index + 1}\n${answer}`;
-    })
-    .join("\n\n");
-}
-
-type AnswerProfile = { fullName: string; phone: string; email: string; address: string; linkedin: string };
-
-function modelAnswers(text: string) {
-  const parts = text.split(/^#\s*A\d+\s*$/m).slice(1);
-  return parts.map((part) => part.split(/^#\s*Q\d+\s*$/m)[0].trim());
-}
-
-function fieldAnswer(question: string, written: string, profile: AnswerProfile, evidence: string) {
-  const kind = question.match(/\((file|text|email|textarea|radio|select|checkbox)\)/i)?.[1].toLowerCase() || "";
-  if (kind === "file") return "FILE";
-  const label = question.split("(")[0].trim();
-  if (/^name$/i.test(label)) return profile.fullName;
-  if (/^e-?mail$/i.test(label) || kind === "email") return profile.email;
-  if (/^phones?$/i.test(label)) return profile.phone;
-  if (/^locations?$/i.test(label) || /^city$/i.test(label)) return profile.address;
-  if (/^linkedin$/i.test(label)) return profile.linkedin || "N/A";
-  if (/^github$/i.test(label)) return firstUrl(evidence, /github\.com/i) || "N/A";
-
-  const options = listedOptions(question);
-  if (options.length && kind !== "textarea") {
-    const skill = skillChoice(question, evidence);
-    if (skill) return optionText(options, skill) || skill;
-    const chosen = optionText(options, written);
-    if (chosen) return chosen;
-  }
-  return written.trim();
-}
-
-function listedOptions(question: string) {
-  const match = question.match(/Options:\s*(.+)$/i);
-  if (!match) return [];
-  return match[1].split("|").map((item) => item.trim()).filter(Boolean);
-}
-
-function optionText(options: string[], answer: string) {
-  const wanted = answer.trim().toLowerCase();
-  return options.find((option) => option.toLowerCase() === wanted)
-    || options.find((option) => new RegExp(`\\b${option.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(answer));
-}
-
-// "Docker and Linux" is Yes only when every named skill was used in the source resume or a bullet.
-function skillChoice(question: string, evidence: string) {
-  const ask = question.replace(/\([^)]*\)\.?/g, " ").replace(/\brequired\b\.?/gi, " ").replace(/options:.*$/i, "").replace(/\s+/g, " ").trim();
-  const skills = ask.match(/\b(?:working with|experience (?:with|in|using))\s+(.+?)\??$/i)?.[1];
-  if (!skills) return "";
-  const parts = skills.split(/\s+and\s+/i).map((part) => part.trim()).filter(Boolean);
-  if (!parts.length) return "";
-  return parts.every((part) => usedSkill(evidence, part)) ? "Yes" : "No";
-}
-
-function usedSkill(evidence: string, skill: string) {
-  const term = skill.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const pattern = /[#.+]/.test(skill) ? new RegExp(term, "i") : new RegExp(`\\b${term}\\b`, "i");
-  return pattern.test(evidence);
-}
-
-function firstUrl(text: string, host: RegExp) {
-  for (const match of text.matchAll(/https?:\/\/[^\s)]+/gi)) {
-    const url = match[0].replace(/[.,)]+$/, "");
-    if (host.test(url)) return url;
-  }
-  return "";
 }
 
 function experienceEvidence(snapshot: PackageSnapshot, baseResumeText: string) {

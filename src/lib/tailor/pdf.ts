@@ -1,7 +1,8 @@
 import PDFDocument from "pdfkit";
 import { DEFAULT_COVER_STYLE, DEFAULT_RESUME_STYLE } from "./default-styles";
 import { resolveFont } from "./fonts";
-import { loadStyle, type Align, type PageStyle, type RuleStyle, type TextStyle } from "./template-style";
+import { loadStyle } from "./style-store";
+import type { Align, PageStyle, RuleStyle, TextStyle } from "./template-style";
 import type { Bullet, GeneratedContent, Profile } from "./types";
 
 // Generated PDFs are drawn in the style read from the uploaded templates (see template-style.ts):

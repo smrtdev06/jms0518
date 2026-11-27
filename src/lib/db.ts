@@ -35,8 +35,18 @@ function pool(): Pool {
 }
 
 export async function query<T extends QueryResultRow = QueryResultRow>(text: string, params: unknown[] = []) {
-  const result = await pool().query<T>(text, params);
-  return result.rows;
+  try {
+    const result = await pool().query<T>(text, params);
+    return result.rows;
+  } catch (error) {
+    // 42703 undefined column, 42P01 undefined table: the code is newer than the database schema (e.g. the dev server
+    // reloaded new code without being restarted). Say how to fix it instead of only naming the column.
+    const code = (error as { code?: string }).code;
+    if ((code === "42703" || code === "42P01") && error instanceof Error && !error.message.includes("npm run db:init")) {
+      error.message += " (the database is older than the code: restart npm run dev, or run npm run db:init, to upgrade it)";
+    }
+    throw error;
+  }
 }
 
 export async function queryOne<T extends QueryResultRow = QueryResultRow>(text: string, params: unknown[] = []) {

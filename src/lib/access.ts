@@ -1,5 +1,6 @@
 import { query, queryOne } from "./db";
-import { HttpError, type SessionUser } from "./auth";
+import { type SessionUser } from "./auth";
+import { HttpError } from "./errors";
 import { can } from "./roles";
 import type { AssigneeFilter } from "./jobs";
 

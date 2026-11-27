@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import clsx from "clsx";
-import { Bot, Briefcase, DatabaseBackup, FileStack, ScrollText, Settings, Users } from "lucide-react";
+import { Bot, Briefcase, DatabaseBackup, FileStack, Mail, ScrollText, Settings, Users } from "lucide-react";
 
 const TABS = [
   { href: "/admin/users", label: "Users", icon: Users },
@@ -13,6 +13,7 @@ const TABS = [
   { href: "/admin/activity", label: "Activity log", icon: ScrollText },
   { href: "/admin/settings", label: "Settings", icon: Settings },
   { href: "/admin/backup", label: "Backup", icon: DatabaseBackup },
+  { href: "/admin/gmail", label: "Gmail", icon: Mail },
 ];
 
 export function AdminTabs() {

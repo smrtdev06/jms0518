@@ -1,7 +1,7 @@
+import { NextResponse } from "next/server";
 import { can, requireApiUser } from "@/lib/auth";
 import { query } from "@/lib/db";
 import { route } from "@/lib/http";
-import { json } from "@/lib/tailor/http";
 import { normalizeJobLink } from "@/lib/normalize";
 import { getSettings } from "@/lib/settings";
 
@@ -28,5 +28,5 @@ export const GET = route(async () => {
     known.add(key); // the same posting saved twice with different tracking parameters
     links.push(job_link);
   }
-  return json({ ok: true, links, total: stored.length, skipped: stored.length - links.length });
+  return NextResponse.json({ ok: true, links, total: stored.length, skipped: stored.length - links.length });
 });

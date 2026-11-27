@@ -64,3 +64,27 @@ body {
     @apply border-rose-500/40 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20;
   }
 }
+
+/* The daily Gmail check notice (bottom right): slides up when it appears, down when closed. */
+@keyframes notice-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes notice-out {
+  to {
+    opacity: 0;
+    transform: translateY(14px) scale(0.98);
+  }
+}
+.animate-notice-in {
+  animation: notice-in 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.animate-notice-out {
+  animation: notice-out 0.22s ease-in both;
+}

@@ -1,4 +1,4 @@
-import { HttpError } from "./auth";
+import { HttpError } from "./errors";
 import { str } from "./http";
 import { ROLES, type Role } from "./roles";
 

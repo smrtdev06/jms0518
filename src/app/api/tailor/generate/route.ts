@@ -1,8 +1,8 @@
-import { after } from "next/server";
+import { after, NextResponse } from "next/server";
 import { can, requireApiUser } from "@/lib/auth";
+import { HttpError } from "@/lib/errors";
 import { readJson, route } from "@/lib/http";
 import { readProvider } from "@/lib/tailor/api-key";
-import { json, serverError } from "@/lib/tailor/http";
 import { loadProfile } from "@/lib/tailor/profile";
 import { startGeneration } from "@/lib/tailor/runner";
 
@@ -13,25 +13,27 @@ export const maxDuration = 300;
 export const POST = route(async (request) => {
   const user = await requireApiUser(can.tailor);
   const profile = await loadProfile(user.id);
-  if (!profile) return json({ ok: false, error: "Save your profile before generating." }, 400);
+  if (!profile) throw new HttpError(400, "Save your profile before generating.");
   const body = await readJson(request);
   const provider = readProvider();
-  if (!provider.apiKey) return json({ ok: false, error: `Set ${provider.keyName} in the environment before generating.` }, 400);
+  if (!provider.apiKey) throw new HttpError(400, `Set ${provider.keyName} in the environment before generating.`);
   const urls = [...new Set(String(body.urls || "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean))];
-  if (!urls.length) return json({ ok: false, error: "Add at least one job URL." }, 400);
+  if (!urls.length) throw new HttpError(400, "Add at least one job URL.");
   for (const url of urls) {
+    let protocol = "";
     try {
-      const target = new URL(url);
-      if (!["http:", "https:"].includes(target.protocol)) throw new Error("bad");
+      protocol = new URL(url).protocol;
     } catch {
-      return json({ ok: false, error: `This is not a job URL: ${url.slice(0, 200)}` }, 400);
+      // not a URL
     }
+    if (protocol !== "http:" && protocol !== "https:") throw new HttpError(400, `This is not a job URL: ${url.slice(0, 200)}`);
   }
+  let started;
   try {
-    const { jobs, done } = await startGeneration(user.id, profile, urls);
-    after(() => done);
-    return json({ ok: true, jobs });
+    started = await startGeneration(user.id, profile, urls);
   } catch (error) {
-    return serverError(error, "Could not start generation.");
+    throw new HttpError(500, "Could not start generation.", { cause: error });
   }
+  after(() => started.done);
+  return NextResponse.json({ ok: true, jobs: started.jobs });
 });

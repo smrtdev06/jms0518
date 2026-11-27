@@ -1,6 +1,6 @@
 import { can, requirePageUser } from "@/lib/auth";
 import { assigneeFilter, workProfile } from "@/lib/access";
-import { countJobs, interviewEndedSql, listJobs, readListParams, type SearchParams } from "@/lib/jobs";
+import { REQUESTED_SQL, countJobs, interviewEndedSql, listJobs, readListParams, type SearchParams } from "@/lib/jobs";
 import { FilterBar, Pagination } from "@/components/list-controls";
 import { PageTitle } from "@/components/page-title";
 import { autoAssign } from "@/lib/assign";
@@ -12,6 +12,7 @@ export const metadata = { title: "Interview Schedule" };
 
 const VIEW_OPTIONS = [
   { value: "all", label: "All" },
+  { value: "requested", label: "Request schedule" },
   { value: "needs_result", label: "Needs result" },
   { value: "scheduled", label: "Scheduled" },
   { value: "interviewed", label: "Interviewed" },
@@ -37,17 +38,23 @@ export default async function InterviewsPage({ searchParams }: { searchParams: P
     assigneeFilter(user) ?? (people && people.userId !== undefined ? { column: "assigned_caller_id" as const, userId: people.userId } : undefined);
   const view = VIEW_OPTIONS.some((o) => o.value === params.status) ? params.status : "all";
 
-  // All: every applied job — scheduled interviews first (by time), then interviewed (awaiting a decision),
-  // unscheduled (just applied), offered and rejected.
-  const orderBy =
-    view === "all"
-      ? // Interviews waiting for their result first: they need someone to act.
-        `NOT (j.interview_status = 'scheduled' AND ${interviewEndedSql()}), ` +
-        "array_position(ARRAY['scheduled', 'interviewed', 'unscheduled', 'offered', 'rejected'], j.interview_status), " +
-        `${BY_INTERVIEW_TIME}, j.applied_at DESC NULLS LAST, j.id DESC`
-      : view === "scheduled" || view === "needs_result"
-        ? `${BY_INTERVIEW_TIME}, j.id DESC`
-        : "j.applied_at DESC NULLS LAST, j.id DESC";
+  // Jobs whose company emailed to schedule an interview ("Request Schedule") come first, newest email first.
+  const requestedFirst = `NOT ${REQUESTED_SQL}, CASE WHEN ${REQUESTED_SQL} THEN j.interview_request_at END DESC NULLS LAST, `;
+  const byApplied = "j.applied_at DESC NULLS LAST, j.id DESC";
+  const ORDER: Record<string, string> = {
+    // Every applied job: interview requests, then interviews waiting for their result (someone must act), then
+    // scheduled (by time), interviewed (awaiting a decision), unscheduled (just applied), offered and rejected.
+    all:
+      requestedFirst +
+      `NOT (j.interview_status = 'scheduled' AND ${interviewEndedSql()}), ` +
+      "array_position(ARRAY['scheduled', 'interviewed', 'unscheduled', 'offered', 'rejected'], j.interview_status), " +
+      `${BY_INTERVIEW_TIME}, ${byApplied}`,
+    requested: "j.interview_request_at DESC NULLS LAST, j.id DESC",
+    scheduled: `${BY_INTERVIEW_TIME}, j.id DESC`,
+    needs_result: `${BY_INTERVIEW_TIME}, j.id DESC`,
+    unscheduled: requestedFirst + byApplied,
+  };
+  const orderBy = ORDER[view] ?? byApplied;
 
   const [{ rows, total, page }, counts] = await Promise.all([
     listJobs({
@@ -56,7 +63,8 @@ export default async function InterviewsPage({ searchParams }: { searchParams: P
       page: params.page,
       size: params.size,
       applyStatus: "applied",
-      interviewStatus: view === "all" ? undefined : view === "needs_result" ? "scheduled" : view,
+      interviewStatus: view === "all" || view === "requested" ? undefined : view === "needs_result" ? "scheduled" : view,
+      requested: view === "requested",
       interviewEnded: view === "needs_result" ? true : view === "scheduled" ? false : undefined,
       assignee,
       orderBy,
@@ -81,6 +89,7 @@ export default async function InterviewsPage({ searchParams }: { searchParams: P
       <ProfileCard
         profile={profile}
         stats={[
+          { label: "Requests", value: counts.requested, tone: "warn" },
           { label: "Scheduled", value: counts.scheduled, tone: "accent" },
           { label: "Needs result", value: counts.needs_result, tone: "warn" },
           { label: "Interviewed", value: counts.interviewed, tone: "warn" },

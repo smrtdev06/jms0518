@@ -1,13 +1,16 @@
 import { gunzipSync, gzipSync } from "node:zlib";
 import { query, transaction } from "./db";
-import { HttpError } from "./auth";
+import { HttpError } from "./errors";
 
 // Database backup / restore for the administrator, inside the app (a host like Vercel has no pg_dump).
 // A backup is gzip-compressed JSON: every row of every table. Binary columns (screenshots, templates) come out of
 // json_agg as "\x<hex>" text, which PostgreSQL reads straight back into bytea, so restore needs no special cases.
 
 // Restore order: referenced tables first.
-const TABLES = ["users", "settings", "job_links", "jobs", "interview_rounds", "stored_files", "audit_logs"] as const;
+const TABLES = [
+  "users", "settings", "job_links", "jobs", "interview_rounds", "stored_files", "audit_logs",
+  "gmail_accounts", "gmail_messages", "gmail_check_runs", "gmail_notices",
+] as const;
 type TableName = (typeof TABLES)[number];
 const APP = "job-management-system";
 

@@ -3,82 +3,44 @@ import { readProvider, scrub } from "./api-key";
 import { parseTailoredApplication, type TailoredApplication } from "./tailored-markdown";
 import type { Experience } from "./types";
 
-// Screening answers use the same model as tailoring. The reply is returned as written.
-export async function generateAnswers(options: { apiKey: string; system: string; user: string; signal?: AbortSignal }) {
-  const provider = readProvider();
-  const service = provider.name;
-  const client = new OpenAI({ apiKey: options.apiKey, baseURL: provider.baseURL, timeout: 180000, maxRetries: 6 });
-  let lastError = `No ${service} model was available for this API key.`;
-  for (const model of provider.models) {
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      try {
-        const response = await client.chat.completions.create(
-          {
-            model,
-            temperature: 0.4,
-            max_tokens: provider.name === "OpenAI" ? (attempt ? 16000 : 12000) : provider.maxTokens,
-            messages: [
-              { role: "system", content: options.system },
-              { role: "user", content: options.user },
-            ],
-            ...provider.extra,
-          },
-          { signal: options.signal },
-        );
-        const choice = response.choices[0];
-        const refusal = (choice?.message as { refusal?: string | null } | undefined)?.refusal;
-        if (refusal) throw new GenerationError(scrub(`${service} declined to answer these questions: ${refusal}`).slice(0, 300), null);
-        if (choice?.finish_reason === "length") {
-          lastError = `${service}'s reply was cut off before it finished.`;
-          continue;
-        }
-        const text = (choice?.message?.content || "").trim();
-        if (!text) {
-          lastError = `${service} returned an empty answer.`;
-          continue;
-        }
-        return { text, model: response.model || model };
-      } catch (error) {
-        if (error instanceof GenerationError) throw error;
-        if (options.signal?.aborted) throw error;
-        const message = error instanceof Error ? error.message : "";
-        const status = (error as { status?: number }).status;
-        if (status === 404 || (/model/i.test(message) && /not found|does not exist|access|unavailable/i.test(message))) {
-          lastError = message;
-          break;
-        }
-        throw new GenerationError(scrub(message || `${service} request failed.`), null);
-      }
-    }
-    if (lastError.startsWith(`${service}'s reply`) || lastError.startsWith(`${service} returned`)) {
-      throw new GenerationError(`${lastError} Try these questions again.`, null);
-    }
-  }
-  throw new GenerationError(scrub(lastError), null);
-}
+export type ChatOptions = { apiKey: string; system: string; user: string; signal?: AbortSignal };
 
-export async function generateApplication(options: {
-  apiKey: string;
-  system: string;
-  user: string;
-  experiences: Experience[];
-  fullName: string;
-  signal?: AbortSignal;
-}) {
-  // OpenAI or DeepSeek (LLM_PROVIDER); both take the same chat-completions request.
+// What to do with one reply: keep it, or ask again with the reason (a cut-off, empty or incomplete reply).
+type ReadReply<T> = (text: string) => { ok: true; value: T } | { ok: false; error: string };
+
+/**
+ * One chat-completions request (OpenAI or DeepSeek, per LLM_PROVIDER). Each model is tried twice; a model that is
+ * not available moves on to the next one. A reply that is still unusable after the second try stops with `retryHint`.
+ */
+export async function complete<T>(
+  options: ChatOptions & {
+    declined: string;
+    retryHint: string;
+    read: ReadReply<T>;
+    /** ask for a JSON object reply (response_format json_object; the prompt must mention JSON) */
+    json?: boolean;
+    temperature?: number;
+    /** room for the reply (default: the provider's) */
+    maxTokens?: number;
+    /** a smaller retry budget than tailoring's, for many short requests */
+    maxRetries?: number;
+  },
+) {
   const provider = readProvider();
   const service = provider.name;
-  const client = new OpenAI({ apiKey: options.apiKey, baseURL: provider.baseURL, timeout: 180000, maxRetries: 6 });
+  const client = new OpenAI({ apiKey: options.apiKey, baseURL: provider.baseURL, timeout: 180000, maxRetries: options.maxRetries ?? 6 });
   let usage: Usage | null = null;
   let lastError = `No ${service} model was available for this API key.`;
   for (const model of provider.models) {
+    let badReply = false;
     for (let attempt = 0; attempt < 2; attempt += 1) {
       try {
         const response = await client.chat.completions.create(
           {
             model,
-            temperature: 0.4,
-            max_tokens: provider.name === "OpenAI" ? (attempt ? 16000 : 12000) : provider.maxTokens,
+            temperature: options.temperature ?? 0.4,
+            max_tokens: options.maxTokens ?? (provider.name === "OpenAI" ? (attempt ? 16000 : 12000) : provider.maxTokens),
+            ...(options.json ? { response_format: { type: "json_object" as const } } : {}),
             messages: [
               { role: "system", content: options.system },
               { role: "user", content: options.user },
@@ -90,33 +52,59 @@ export async function generateApplication(options: {
         usage = addUsage(usage, readUsage(response.usage));
         const choice = response.choices[0];
         const refusal = (choice?.message as { refusal?: string | null } | undefined)?.refusal;
-        if (refusal) throw new GenerationError(scrub(`${service} declined to write this application: ${refusal}`).slice(0, 300), usage);
+        if (refusal) throw new GenerationError(scrub(`${service} declined to ${options.declined}: ${refusal}`).slice(0, 300), usage);
         if (choice?.finish_reason === "length") {
+          badReply = true;
           lastError = `${service}'s reply was cut off before it finished.`;
           continue;
         }
-        const text = choice?.message?.content || "";
-        if (!/^#\s*RESUME\b/im.test(text) || !/^#\s*COVER LETTER\b/im.test(text)) {
-          lastError = `${service}'s reply did not include a resume and a cover letter.`;
+        const reply = options.read(choice?.message?.content || "");
+        if (!reply.ok) {
+          badReply = true;
+          lastError = `${service}${reply.error}`;
           continue;
         }
-        const tailored = parseTailoredApplication(text, options.experiences, options.fullName);
-        return { ...tailored, raw: text, usage, model: response.model || model } satisfies TailoredApplication & { raw: string; usage: Usage | null; model: string };
+        return { value: reply.value, usage, model: response.model || model };
       } catch (error) {
         if (error instanceof GenerationError) throw error;
         if (options.signal?.aborted) throw error;
         const message = error instanceof Error ? error.message : "";
         const status = (error as { status?: number }).status;
         if (status === 404 || (/model/i.test(message) && /not found|does not exist|access|unavailable/i.test(message))) {
+          badReply = false;
           lastError = message;
           break;
         }
         throw new GenerationError(scrub(message || `${service} request failed.`), usage);
       }
     }
-    if (lastError.startsWith(`${service}'s reply`)) throw new GenerationError(`${lastError} Try this link again.`, usage);
+    if (badReply) throw new GenerationError(`${lastError} ${options.retryHint}`, usage);
   }
   throw new GenerationError(scrub(lastError), usage);
+}
+
+// Screening answers use the same model as tailoring. The reply is returned as written.
+export async function generateAnswers(options: ChatOptions) {
+  const result = await complete({
+    ...options,
+    declined: "answer these questions",
+    retryHint: "Try these questions again.",
+    read: (text) => (text.trim() ? { ok: true, value: text.trim() } : { ok: false, error: " returned an empty answer." }),
+  });
+  return { text: result.value, model: result.model };
+}
+
+export async function generateApplication(options: ChatOptions & { experiences: Experience[]; fullName: string }) {
+  const result = await complete({
+    ...options,
+    declined: "write this application",
+    retryHint: "Try this link again.",
+    read: (text) =>
+      /^#\s*RESUME\b/im.test(text) && /^#\s*COVER LETTER\b/im.test(text)
+        ? { ok: true, value: { ...parseTailoredApplication(text, options.experiences, options.fullName), raw: text } }
+        : { ok: false, error: "'s reply did not include a resume and a cover letter." },
+  });
+  return { ...result.value, usage: result.usage, model: result.model } satisfies TailoredApplication & { raw: string; usage: Usage | null; model: string };
 }
 
 export type Usage = { prompt: number; completion: number; total: number; cached: number };

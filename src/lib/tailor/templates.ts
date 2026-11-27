@@ -1,5 +1,6 @@
 import { storage, templateKey } from "./storage";
-import { analyzeTemplate, loadStyle, styleFile, summarizeStyle, templateFile } from "./template-style";
+import { loadStyle, styleFile, templateFile } from "./style-store";
+import { analyzeTemplate, summarizeStyle } from "./template-style";
 
 export type TemplateKind = "resume" | "cover";
 

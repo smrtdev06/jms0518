@@ -1,5 +1,5 @@
 import { query, transaction } from "./db";
-import { HttpError } from "./auth";
+import { HttpError } from "./errors";
 
 // A member hands their jobs to the team on the Team page:
 //   bidder ← jobs that are Ready to Apply (apply_status 'ready')

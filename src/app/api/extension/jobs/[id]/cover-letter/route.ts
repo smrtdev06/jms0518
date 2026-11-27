@@ -1,7 +1,7 @@
-import { HttpError } from "@/lib/auth";
+import { HttpError } from "@/lib/errors";
 import { assertMemberJob, extensionRoute, requireExtensionMember } from "@/lib/extension";
 import { parseId } from "@/lib/http";
-import { sendPackageFile } from "@/lib/tailor/http";
+import { sendPackageFile } from "@/lib/tailor/file-transfer";
 
 type Ctx = { params: Promise<{ id: string }> };
 

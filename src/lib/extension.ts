@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { workProfile, type ProfileSummary } from "./access";
-import { createExtensionToken, HttpError, userFromExtensionToken, type SessionUser } from "./auth";
+import { userFromExtensionToken, type SessionUser } from "./auth";
+import { HttpError } from "./errors";
 import { audit, query, queryOne, transaction } from "./db";
 import { countJobs } from "./jobs";
 import { readJson } from "./http";
@@ -55,28 +56,6 @@ export async function requireExtensionMember(request: Request): Promise<SessionU
   if (!user) throw new HttpError(401, "Sign in from the extension first");
   if (user.role !== "member") throw new HttpError(403, "Only a member can use the auto-apply extension");
   return user;
-}
-
-type ExtensionUser = {
-  id: number;
-  username: string;
-  displayName: string;
-  role: string;
-  active: boolean;
-};
-
-export function presentUser(user: { id: number; username: string; displayName: string; role: string; active: boolean }): ExtensionUser {
-  return {
-    id: user.id,
-    username: user.username,
-    displayName: user.displayName,
-    role: user.role,
-    active: user.active,
-  };
-}
-
-export async function issueMemberToken(userId: number) {
-  return createExtensionToken(userId);
 }
 
 function presentProfile(profile: ProfileSummary | null) {
@@ -169,13 +148,14 @@ function dayBound(value: string | null, end: boolean) {
 
 async function listExtensionJobs(
   userId: number,
-  filters: { status?: string | null; q?: string | null; appliedFrom?: string | null; appliedTo?: string | null; limit?: number },
+  filters: { status?: string | null; q?: string | null; appliedFrom?: string | null; appliedTo?: string | null; limit?: number; offset?: number },
 ) {
   const status = filters.status && filters.status !== "all" ? filters.status : "";
   if (status && status !== "ready" && status !== "applied" && status !== "failed") {
     throw new HttpError(400, "status must be all, ready, applied or failed");
   }
   const limit = Math.min(1000, Math.max(1, filters.limit || 500));
+  const offset = Math.max(0, Math.floor(filters.offset || 0));
   const where = ["j.user_id = $1", "j.gen_status = 'done'"];
   const params: unknown[] = [userId];
   if (status) {
@@ -210,26 +190,30 @@ async function listExtensionJobs(
      ORDER BY array_position(ARRAY['ready', 'applied', 'failed'], j.apply_status),
        CASE WHEN j.apply_status = 'ready' THEN j.generated_at END DESC,
        j.applied_at DESC NULLS LAST, j.apply_failed_at DESC NULLS LAST, j.id DESC
-     LIMIT ${limit}`,
+     LIMIT ${limit} OFFSET ${offset}`,
     params,
   );
-  return { jobs: rows.map(presentJob), total, truncated: total > rows.length };
+  const nextOffset = offset + rows.length < total ? offset + rows.length : null;
+  return { jobs: rows.map(presentJob), total, truncated: nextOffset !== null, offset, nextOffset };
 }
 
-export async function extensionSnapshot(user: SessionUser) {
+/** Everything the extension shows. Jobs come in pages of up to 1000: pass `nextOffset` back as `offset` for more. */
+export async function extensionSnapshot(user: SessionUser, page: { offset?: number; limit?: number } = {}) {
   const [{ profile, counts }, listed] = await Promise.all([
     memberProfile(user),
-    listExtensionJobs(user.id, { limit: 1000 }),
+    listExtensionJobs(user.id, { limit: page.limit || 1000, offset: page.offset }),
   ]);
   return {
     ok: true,
     syncedAt: new Date().toISOString(),
-    user: presentUser({ ...user, active: true }),
+    user: { id: user.id, username: user.username, displayName: user.displayName, role: user.role, active: true },
     profile,
     counts,
     jobs: listed.jobs,
     total: listed.total,
     truncated: listed.truncated,
+    offset: listed.offset,
+    nextOffset: listed.nextOffset,
   };
 }
 

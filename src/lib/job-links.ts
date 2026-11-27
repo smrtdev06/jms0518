@@ -1,6 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { query } from "./db";
-import { HttpError } from "./auth";
+import { HttpError } from "./errors";
 import { isHttpUrl } from "./normalize";
 
 // Job links sent by the job-finding bot (POST /api/job-links), kept in their own table (job_links).

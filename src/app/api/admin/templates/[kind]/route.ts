@@ -1,9 +1,11 @@
+import { NextResponse } from "next/server";
 import { audit } from "@/lib/db";
-import { can, requireApiUser, HttpError } from "@/lib/auth";
+import { can, requireApiUser } from "@/lib/auth";
+import { HttpError } from "@/lib/errors";
 import { route } from "@/lib/http";
-import { attachment, json, readUpload } from "@/lib/tailor/http";
+import { attachment, readUpload } from "@/lib/tailor/file-transfer";
 import { replaceTemplatePdf, templatePdf, type TemplateKind } from "@/lib/tailor/templates";
-import { templateFile } from "@/lib/tailor/template-style";
+import { templateFile } from "@/lib/tailor/style-store";
 
 type Ctx = { params: Promise<{ kind: string }> };
 
@@ -26,12 +28,13 @@ export const PUT = route<Ctx>(async (request, { params }) => {
   const admin = await requireApiUser(can.administer);
   const kind = kindOf((await params).kind);
   const upload = await readUpload(request);
-  if (!upload) return json({ ok: false, error: "Send the PDF as a file upload." }, 400);
+  if (!upload) throw new HttpError(400, "Send the PDF as a file upload.");
+  let style;
   try {
-    const style = await replaceTemplatePdf(kind, upload.bytes);
-    await audit(admin.id, "template.replaced", "template", kind, { file: upload.name });
-    return json({ ok: true, file: templateFile(kind), style });
+    style = await replaceTemplatePdf(kind, upload.bytes);
   } catch (error) {
-    return json({ ok: false, error: error instanceof Error ? error.message : "Could not read the template." }, 400);
+    throw new HttpError(400, error instanceof Error ? error.message : "Could not read the template.");
   }
+  await audit(admin.id, "template.replaced", "template", kind, { file: upload.name });
+  return NextResponse.json({ ok: true, file: templateFile(kind), style });
 });

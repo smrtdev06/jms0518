@@ -1,4 +1,6 @@
 -- Job Management System schema (with the Resume Tailor). Safe to run repeatedly (idempotent).
+-- It describes the current tables for a new database. Changes to existing data (or anything that must run only
+-- once) go in db/migrations/NNN_name.sql instead; npm run db:init applies each migration once, in name order.
 -- One users table (accounts + their resume tailor profile) and one jobs table
 -- (tailoring progress, tailored content, applying and interview steps).
 
@@ -99,6 +101,14 @@ CREATE TABLE IF NOT EXISTS jobs (
   interview_result_at      TIMESTAMPTZ,
   interview_result_by      INTEGER REFERENCES users(id) ON DELETE SET NULL,
 
+  -- Interview request: the profile's Gmail received an email asking to schedule an interview for this job (found by
+  -- the daily Gmail check, src/lib/gmail). The newest such email is kept; "Request Schedule" shows while unscheduled.
+  interview_requested       BOOLEAN NOT NULL DEFAULT FALSE,
+  interview_request_at      TIMESTAMPTZ,
+  interview_request_url     TEXT NOT NULL DEFAULT '',
+  interview_request_subject TEXT NOT NULL DEFAULT '',
+  interview_request_from    TEXT NOT NULL DEFAULT '',
+
   created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at           TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -131,17 +141,6 @@ CREATE TABLE IF NOT EXISTS interview_rounds (
 );
 CREATE INDEX IF NOT EXISTS interview_rounds_job_idx ON interview_rounds (job_id);
 CREATE INDEX IF NOT EXISTS interview_rounds_result_at_idx ON interview_rounds (result_at);
-
--- Upgrade: before rounds existed, a rescheduled interview kept its old result while Scheduled again. Move such a
--- result into the history (its old schedule is unknown). No-op once done: a Scheduled job no longer keeps a result.
-WITH moved AS (
-  INSERT INTO interview_rounds (job_id, round, outcome, note, result_at, result_by)
-  SELECT id, 1, interview_result_outcome, interview_result_note, interview_result_at, interview_result_by
-  FROM jobs WHERE interview_status = 'scheduled' AND interview_result_outcome <> ''
-  RETURNING job_id
-)
-UPDATE jobs SET interview_result_outcome = '', interview_result_note = '', interview_result_at = NULL, interview_result_by = NULL
-WHERE id IN (SELECT job_id FROM moved);
 
 -- Job links sent by the job-finding bot (POST /api/job-links). Separate from jobs: one row per link, a link that is
 -- already here is skipped.
@@ -180,3 +179,72 @@ INSERT INTO settings (key, value) VALUES
   ('company_cooldown_days', '30'::jsonb),
   ('duplicate_scope', '"profile"'::jsonb)
 ON CONFLICT (key) DO NOTHING;
+
+-- Failed sign-ins of the last 15 minutes, per user ID and per client address (src/lib/login-limit.ts).
+CREATE TABLE IF NOT EXISTS login_failures (
+  key       TEXT NOT NULL,
+  failed_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS login_failures_key_idx ON login_failures (key, failed_at);
+
+-- Gmail inboxes of the members' profiles, connected by the administrator (Administrator -> Gmail). The refresh token
+-- is encrypted with SESSION_SECRET. Every email received before synced_through has been checked.
+CREATE TABLE IF NOT EXISTS gmail_accounts (
+  member_id       INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  email           TEXT NOT NULL,
+  refresh_token   TEXT NOT NULL,
+  connected_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  connected_by    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  synced_through  TIMESTAMPTZ,
+  last_sync_at    TIMESTAMPTZ,
+  last_result     JSONB NOT NULL DEFAULT '{}'::jsonb,
+  last_error      TEXT NOT NULL DEFAULT '',
+  -- Set while a check runs, so two checks never read the same inbox at once.
+  sync_started_at TIMESTAMPTZ
+);
+
+-- Every email the Gmail check has analyzed (so none goes to the AI twice), with what the AI found.
+CREATE TABLE IF NOT EXISTS gmail_messages (
+  member_id         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  message_id        TEXT NOT NULL,
+  received_at       TIMESTAMPTZ,
+  sender            TEXT NOT NULL DEFAULT '',
+  subject           TEXT NOT NULL DEFAULT '',
+  category          TEXT NOT NULL DEFAULT '',
+  interview_request BOOLEAN NOT NULL DEFAULT FALSE,
+  company_name      TEXT NOT NULL DEFAULT '',
+  job_title         TEXT NOT NULL DEFAULT '',
+  job_id            INTEGER REFERENCES jobs(id) ON DELETE SET NULL,
+  analysis          JSONB NOT NULL DEFAULT '{}'::jsonb,
+  processed_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (member_id, message_id)
+);
+CREATE INDEX IF NOT EXISTS gmail_messages_request_idx ON gmail_messages (interview_request, received_at DESC);
+
+-- Every finished Gmail check (the daily cron job, the server's own scheduler, or Check now): what it found per inbox
+-- (src/lib/gmail/sync.ts AccountReport). The daily "Gmail check" notice is built from the checks of one day.
+CREATE TABLE IF NOT EXISTS gmail_check_runs (
+  id          SERIAL PRIMARY KEY,
+  finished_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  trigger     TEXT NOT NULL DEFAULT '',
+  done        BOOLEAN NOT NULL DEFAULT TRUE,
+  reports     JSONB NOT NULL DEFAULT '[]'::jsonb
+);
+CREATE INDEX IF NOT EXISTS gmail_check_runs_finished_idx ON gmail_check_runs (finished_at DESC);
+
+-- The daily Gmail check notice of each user: shown in the first session after that day's check (session = the sign-in
+-- it was shown in), until the user closes it; a later sign-in that day does not show it again.
+CREATE TABLE IF NOT EXISTS gmail_notices (
+  user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  day       DATE NOT NULL,
+  session   TEXT NOT NULL DEFAULT '',
+  shown_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  closed_at TIMESTAMPTZ,
+  PRIMARY KEY (user_id, day)
+);
+
+-- The migrations in db/migrations that have been applied to this database (npm run db:init).
+CREATE TABLE IF NOT EXISTS schema_migrations (
+  name       TEXT PRIMARY KEY,
+  applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);

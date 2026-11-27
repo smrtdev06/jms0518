@@ -10,8 +10,11 @@
     "vercel-build": "node scripts/db-init.mjs && next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
+    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \"tests/**/*.test.ts\"",
+    "check": "npm run typecheck && npm test",
     "db:init": "node scripts/db-init.mjs",
-    "db:demo": "node scripts/db-demo.mjs"
+    "db:demo": "node scripts/db-demo.mjs",
+    "db:sql": "node scripts/db-sql.mjs"
   },
   "dependencies": {
     "@sparticuz/chromium": "^148.0.0",

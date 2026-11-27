@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Pencil, Trash2, Users } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Plus, Pencil, Trash2, Users } from "lucide-react";
 import { ROLES, ROLE_LABELS, type Role } from "@/lib/roles";
 import { Field, FormError, Modal, Pill, Table, Td, Th, Toggle, useApi } from "@/components/admin-ui";
 import { formatDateTime } from "@/lib/format";
+import { gmailConnection } from "@/lib/gmail/mailbox";
 
 type User = {
   id: number;
@@ -20,6 +21,9 @@ type User = {
   team_size: number;
   generated: number;
   applied: number;
+  profile_email: string;
+  gmail_email: string | null;
+  gmail_error: string | null;
 };
 type Member = { id: number; name: string; username: string };
 
@@ -58,7 +62,7 @@ export function UsersManager({ users, members, currentUserId }: { users: User[];
         </button>
       </div>
       <FormError error={error} />
-      <Table minWidth={960}>
+      <Table minWidth={1100}>
         <thead>
           <tr>
             <Th>User ID</Th>
@@ -66,6 +70,7 @@ export function UsersManager({ users, members, currentUserId }: { users: User[];
             <Th>Role</Th>
             <Th>Member / team</Th>
             <Th>Status</Th>
+            <Th>Gmail</Th>
             <Th>Activity</Th>
             <Th>Last login</Th>
             <Th />
@@ -102,6 +107,7 @@ export function UsersManager({ users, members, currentUserId }: { users: User[];
                 )}
               </Td>
               <Td>{u.is_active ? <Pill tone="good">Active</Pill> : <Pill tone="bad">Disabled</Pill>}</Td>
+              <Td>{u.role === "member" ? <GmailStatus user={u} /> : <span className="text-xs text-muted">—</span>}</Td>
               <Td className="text-xs tabular-nums text-muted">
                 {u.role === "member" ? `${u.generated} generated` : u.role === "bidder" ? `${u.applied} applied` : "—"}
               </Td>
@@ -223,5 +229,22 @@ function UserForm({ user, members, defaultMember, onClose }: { user: User | null
         </div>
       </form>
     </Modal>
+  );
+}
+
+/** The Google connection status of a member's profile Gmail (connected in Administrator -> Gmail). */
+function GmailStatus({ user }: { user: User }) {
+  if (!user.profile_email) return <Pill tone="neutral">No Gmail</Pill>;
+  const state = gmailConnection(user.profile_email, user.gmail_email, user.gmail_error);
+  const Icon = state.tone === "good" ? CheckCircle2 : state.tone === "bad" ? AlertTriangle : null;
+  return (
+    <span title={state.hint}>
+      <Pill tone={state.tone}>
+        <span className="inline-flex items-center gap-1">
+          {Icon && <Icon className="size-3" />}
+          {state.label}
+        </span>
+      </Pill>
+    </span>
   );
 }

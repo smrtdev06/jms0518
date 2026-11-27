@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { HttpError } from "@/lib/auth";
+import { HttpError } from "@/lib/errors";
 import { route } from "@/lib/http";
 import { assertBotKey, extractLinks, saveLinks } from "@/lib/job-links";
 

@@ -1,5 +1,5 @@
 import { query, queryOne } from "./db";
-import { HttpError } from "./auth";
+import { HttpError } from "./errors";
 
 // Bidders and callers belong to one member (their client).
 
